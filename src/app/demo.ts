@@ -1,4 +1,5 @@
-import { Catalog, Group, Title } from './models';
+import { Catalog, Decision, Group, Title } from './models';
+export const DEMO_PARTNER_VOTES: Record<string, Decision> = {'movie:157336':'like','tv:66732':'like','movie:238':'dislike'};
 export const DEMO_CATALOG: Catalog = {
  providers: [{provider_id:8,provider_name:'Netflix',logo_path:'/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg'},{provider_id:119,provider_name:'Prime Video',logo_path:'/emthp39XA2YScoYL1p0sdbAH2WA.jpg'},{provider_id:337,provider_name:'Disney+',logo_path:'/97yvRBw1GzX7fXprcF80er19ot.jpg'},{provider_id:1899,provider_name:'HBO Max',logo_path:'/jbe4gVSfRlbPTdESXhEKpornsfu.jpg'},{provider_id:350,provider_name:'Apple TV',logo_path:'/2E03IAZsX4ZaUqM7tXlctEPMGWS.jpg'},{provider_id:63,provider_name:'Filmin',logo_path:'/kO2SWXvDCHAquaUuTJBuZkTBAuU.jpg'}],
  movie_genres:[{id:28,name:'Acción'},{id:12,name:'Aventura'},{id:16,name:'Animación'},{id:35,name:'Comedia'},{id:18,name:'Drama'},{id:27,name:'Terror'},{id:10749,name:'Romance'},{id:878,name:'Ciencia ficción'},{id:99,name:'Documental'}],tv_genres:[{id:18,name:'Drama'},{id:35,name:'Comedia'},{id:10765,name:'Ciencia ficción y fantasía'}],

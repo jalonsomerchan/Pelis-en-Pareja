@@ -18,8 +18,11 @@ Base: `{API_BASE}/pelisenpareja`. Router Flight existente. GET y POST según tab
 | POST | remove_member | group_id, uid | left |
 | GET | catalog | group_id, region opcional | providers, movie_genres, tv_genres, countries |
 | POST | settings | group_id, name, region, media_type, providers, excluded_genres, excluded_countries | group |
-| GET | discover | group_id, page (1–500) | titles, next_page, filter_version, reason |
-| GET | state | group_id, titles (lista movie:ID,tv:ID, máximo 60) | group, hidden |
+| GET | discover | group_id, page (1–500), media_type opcional | titles, next_page, filter_version, reason |
+| GET | priorities | group_id, media_type opcional | titles prioritarios, filter_version |
+| GET | favorites | group_id, page (1–500), scope (mine/group) | items (30 por página), next_page |
+| GET | platforms | group_id, provider_id, mode (recent/popular), media_type opcional, page | titles, next_page, filter_version, reason |
+| GET | state | group_id, media_type opcional, titles (lista movie:ID,tv:ID, máximo 60) | group, hidden, seen, priority_keys |
 | POST | vote | group_id, media_type, tmdb_id, decision | saved, matches nuevos |
 | GET | matches | group_id | matches activos |
 | GET | notifications | — | últimos 100 avisos propios |
@@ -34,11 +37,19 @@ Base: `{API_BASE}/pelisenpareja`. Router Flight existente. GET y POST según tab
 
 Los matches devueltos al votar son únicamente los que acaba de crear esa operación. La lista completa se obtiene en `matches`.
 
+`discover`/`priorities`/`platforms` aceptan `media_type=movie|tv|both`; si se omite, usan el tipo del grupo. El filtro de la petición no cambia el grupo. Prioridad: síes de miembros actuales, sin voto propio ni visto global, ordenados por cantidad de síes y recencia. Se revalida disponibilidad y exclusiones antes de registrar la oferta. La mezcla favorece dos títulos con síes por cada título general, sin duplicados. `group_likes` señala el número de síes en las propuestas prioritarias.
+
+`favorites.items`: `{title, liked_at, seen, matched, votes:[{uid,display_name,decision}]}`. `scope=mine` (por defecto) incluye tus votos `like`; `scope=group` los títulos que gustan a algún miembro actual, sin duplicados, dentro del grupo autorizado. `decision` es `like`, `dislike`, `seen` o null (pendiente). La persona que marcó visto se identifica como `seen`; `seen=true` informa de la exclusión global. El historial no se pierde al marcar visto. Los votos pertenecen solo a miembros actuales. `title.my_decision` refleja tu voto y `can_vote=false` señala fichas consultadas sin voto propio previo: la lista compartida no crea ofertas ni permite saltarse filtros. Para votar esos títulos se utiliza Descubrir o Plataformas.
+
+`platforms.provider_id` debe estar entre las plataformas elegidas del grupo. `recent` ordena por estreno original, sin fechas futuras; `popular` por popularidad TMDB. No representan fechas de incorporación a una plataforma ni sus cifras de reproducciones. Se aplican exclusiones del grupo y se eliminan vistos. Los títulos incluyen `my_decision` y registran oferta para poder votar desde esta página; aquí pueden verse títulos que ya votaste.
+
+`state.hidden` retira vistos y votos propios del mazo; `state.seen` retira solo vistos de los catálogos. `priority_keys` son pistas de síes pendientes para consultar `priorities` cuando cambien; no autorizan un voto por sí solas. Un voto previamente guardado permite reconsiderarlo desde el historial aunque hayan cambiado filtros; los vistos siguen bloqueando nuevos síes/noes. Sin voto previo se exige una oferta vigente, salvo marcar un match como visto.
+
 ## Permisos
 
 `invite_email`, `cancel_invite`, `rotate_code` y `settings`: propietario. `remove_member`: propietario para expulsar o el propio miembro para salir. `accept_invite`: mismo email verificado de la invitación, vigente y pendiente. El UID del autor se obtiene del auth; el UID del cuerpo de `remove_member` solo identifica a quien se quiere retirar.
 
-Un usuario ajeno no recibe datos del grupo. La lista de invitaciones con emails solo se incluye al propietario. No se exponen emails de miembros ni votos individuales de otras personas.
+Un usuario ajeno no recibe datos del grupo. La lista de invitaciones con emails solo se incluye al propietario. Favoritos permite ver los votos individuales de los miembros actuales del propio grupo, según la petición del usuario. No expone sus emails ni votos de otros grupos.
 
 ## Errores relevantes
 

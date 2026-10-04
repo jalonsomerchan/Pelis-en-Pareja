@@ -6,6 +6,7 @@ Archivos nuevos en `/Applications/MAMP/htdocs/OV2/api`:
 
 ```text
 pelisenpareja.php
+PelisCatalog.php
 PelisTelegram.php
 migrations/20261004_pelisenpareja.sql
 cron/pelisenpareja_migrate.php
@@ -21,7 +22,7 @@ Conservar `BaseControler.php`, `auth.php`, Composer y la configuración local de
 
 Extensiones requeridas: mysqli/mysqlnd, cURL, OpenSSL y mbstring. PHP 7.4 no admite las sintaxis de PHP 8; los archivos nuevos se han comprobado con el binario MAMP 7.4.33.
 
-Ejecutar la migración según `database/README.md`. Después insertar la clave en `PelisTmdb::$apiKey`. No enviar esa clave al frontend. Definir `pelisenpareja::$appUrl` con la URL pública real. Se propone `https://pelisenpareja.alon.one`, pero no se ha creado ni publicado ese dominio.
+Ejecutar la migración según `database/README.md`. Después insertar la clave en `PelisTmdb::$apiKey`. No enviar esa clave al frontend. `pelisenpareja::$appUrl` ya está configurado como `https://pelisenpareja.alon.one`, el dominio elegido para GitHub Pages. Aún no se ha configurado ni publicado el dominio en esta sesión.
 
 ## Correo
 
@@ -43,18 +44,22 @@ Ejecutar manualmente una vez permite revisar el resultado JSON `sent`, `failed`,
 
 ## Frontend
 
-`public/runtime-config.js` contiene solo configuración pública. Para producción usa `https://alon.one/api`. Si cambia el servidor, editarlo. MAMP local debe estar arrancado; si usa puerto 8888, cambiar la URL local.
+El destino es **GitHub Pages en `https://pelisenpareja.alon.one`**. Ver [GITHUB_PAGES.md](GITHUB_PAGES.md) para el workflow preparado y los pasos de Pages, DNS, HTTPS y Firebase.
+
+`public/runtime-config.js` contiene solo configuración pública. Para producción usa `https://alon.one/api`; en localhost/127.0.0.1, `http://localhost/OV2/api`. MAMP local debe estar arrancado.
 
 Firebase: proyecto existente `alonsoftware`, Google y Email/Password activos, dominios del frontend autorizados. La app incluye verificación y recuperación de contraseña; estos flujos dependen de la configuración de Authentication existente.
 
 ```bash
 npm ci
-npm run build
+npm run build:pages
 ```
 
-Publicar el contenido de `dist/pelis-en-pareja/browser`, incluidos archivos ocultos (`.htaccess`). Debe servir `index.html` para rutas de navegación, MIME `application/manifest+json` para el manifest y HTTPS para instalar service workers. No cachear persistentemente `index.html`, `runtime-config.js`, `ngsw.json` ni `ngsw-worker.js`; la `.htaccess` de la build ya lo indica en Apache con `mod_headers`.
+El workflow publica `dist/pelis-en-pareja/browser` mediante las acciones oficiales de Pages. Usa base `/` para el dominio personalizado, conserva manifest y service worker y no necesita reescrituras para las vistas actuales ni las invitaciones `/?invitation=...`. El archivo `CNAME` identifica el dominio en la build, pero con Actions hay que configurarlo expresamente en Settings → Pages.
 
-Para publicar en una subcarpeta:
+Si se publica alternativamente en Apache, subir el contenido de esa carpeta incluidos archivos ocultos (`.htaccess`). Servir bajo HTTPS y no cachear persistentemente `index.html`, `runtime-config.js`, `ngsw.json` ni `ngsw-worker.js`; la `.htaccess` ya lo indica con `mod_headers`. GitHub Pages no aplica `.htaccess` ni permite configurar esas cabeceras desde el proyecto.
+
+Para publicar alternativamente en una subcarpeta:
 
 ```bash
 npx ng build --base-href /pelisenpareja/
@@ -64,6 +69,8 @@ La base href, start_url e iconos quedan relativos. Para una subcarpeta, también
 
 ## Comprobación real
 
+Para actualizar a las nuevas páginas, subir `pelisenpareja.php` y `PelisCatalog.php` juntos y publicar la nueva build. No hay migración adicional: se usan `pp_votes`, `pp_titles`, `pp_seen` y `pp_offers` existentes.
+
 1. Crear dos cuentas y un grupo, elegir una plataforma y tipo de contenido.
 2. Unirse con código y aceptar una invitación desde el correo correcto verificado.
 3. Cada miembro da sí al mismo título: un solo match y un aviso interno por miembro.
@@ -72,3 +79,6 @@ La base href, start_url e iconos quedan relativos. Para una subcarpeta, también
 6. Excluir género y país, incluidas coproducciones, y revisar propuestas.
 7. Instalar la PWA; abrir sin conexión, comprobar banner y votos bloqueados.
 8. Cambiar miembros del grupo y comprobar que el consenso se recalcula.
+9. Dar sí a un título con una cuenta y comprobar que aparece antes para los demás, respetando los filtros y sin repetir sus votos.
+10. Abrir Favoritos y comprobar síes, noes y pendientes con dos cuentas; revisar que cambios se reflejan durante el sondeo.
+11. Probar Series/Películas/Todo sin modificar preferencias del grupo y explorar Recientes/Populares en cada suscripción.

@@ -12,7 +12,7 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 
 ## Realizado
 
-- Angular 22.2.1, Firebase SDK, señales, formularios standalone, PWA instalable con manifest, iconos y service worker.
+- Angular 22.2.1, Firebase SDK, señales, formularios standalone, PWA instalable con manifest, iconos y service worker. Navegación lateral en escritorio y menú hamburguesa en móvil.
 - Acceso Google, registro/login con correo, verificación y recuperación de contraseña. Tokens Firebase actualizados por el SDK y validados por `auth.php`.
 - Grupos múltiples, crear/unirse, invitar por correo y código, compartir, renovar código, retirar miembros y salir con transferencia de propietario.
 - Descubrir con arrastre táctil/puntero, botones y flechas del teclado; ficha de detalle; matches; avisos; configuración de plataformas y exclusiones por categoría/país.
@@ -23,10 +23,17 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 - Consenso serializado por grupo, idempotencia de match/avisos, recalcular tras entradas y salidas, vistos comunes a todos.
 - Cola Telegram con claims, recuperación de workers, reintentos y descarte de avisos de un consenso ya inválido.
 - Sin caché privada de API; cartelera visual cacheada por el service worker. Offline informa y bloquea votos reales.
+- Frontend preparado para GitHub Pages en `pelisenpareja.alon.one`: workflow de pruebas/build/despliegue en `main`, comando `build:pages`, CNAME y guía `GITHUB_PAGES.md`. La carpeta no tiene Git ni remoto; Pages/DNS/Firebase y publicación siguen pendientes.
+- Nuevas peticiones: los síes de miembros actuales tienen prioridad (dos propuestas preferidas por cada propuesta general), incluso si no están en la página popular de TMDB. El sondeo promueve propuestas nuevas conservando la tarjeta activa; nunca reintroduce votos propios ni vistos.
+- Favoritos paginados con selector Mis favoritos/Del grupo: tus síes o los de cualquier miembro y votos de miembros actuales, incluidos negativos y pendientes. Los vistos conservan historial y un aviso de visto global.
+- Pestañas Series | Películas | Todo en portada: filtro personal, sin escrituras en preferencias compartidas. La elección del grupo se usa como valor inicial.
+- Página Plataformas: selector entre suscripciones elegidas, Recientes/Populares, series/películas/todo, paginación, ficha y votar sí directamente. Filtros del grupo y vistos se respetan.
+- Helper backend nuevo `PelisCatalog.php`; endpoints `priorities`, `favorites`, `platforms`. Se reutilizan las tablas existentes, sin migración adicional. Pruebas: 10 Node, 26 catálogo y 18 consenso MySQL local; TMDB simulado.
 
 ## Decisiones
 
 - Backend confirmado por el usuario: `http://localhost/OV2/api` cuando el frontend se abre en `localhost` o `127.0.0.1`; `https://alon.one/api` en producción. Selección automática por hostname en `public/runtime-config.js`, verificada también en el build.
+- Hosting elegido: GitHub Pages en `https://pelisenpareja.alon.one`, base `/`. Con Actions, configurar el dominio en Settings → Pages; el archivo CNAME por sí solo no lo activa. DNS CNAME del subdominio hacia el usuario/organización `.github.io`, sin nombre de repositorio.
 - Región inicial ES, modificable; proveedores dinámicos de TMDB, sin IDs fijos de plataformas en producción.
 - Aceptar cualquier plataforma elegida (OR) con modalidad de suscripción `flatrate`.
 - Países por origen/producción de la ficha; excluye coproducciones si cualquier país está vetado.
@@ -36,18 +43,20 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 - Filtros afectan nuevas propuestas; no borran votos ni matches históricos por sí solos.
 - Cambiar la composición del grupo invalida matches hasta que vuelva a haber unanimidad. Se conserva ID e historial de generaciones.
 - Los vistos permanecen excluidos incluso si abandona el grupo quien los marcó.
+- Por petición del usuario, los votos individuales sí son visibles en la página de favoritos de otros miembros del mismo grupo. No se exponen emails ni datos de otros grupos.
+- Recientes usa fecha de estreno original del título; Populares usa popularidad TMDB. TMDB no aporta aquí fechas de incorporación por plataforma ni cifras reales de reproducciones.
 - La identidad compartida de la API no se duplica: `pp_users` contiene un perfil y ajustes específicos, sin contraseñas.
 - Avisos internos consultados cada 15 segundos con app visible. Telegram se entrega mediante cron cada minuto. No se ha implementado Web Push con backend VAPID.
 
 ## Para ponerla en producción
 
 1. Usuario: ejecutar migración y verificar 12 tablas.
-2. Añadir clave a `PelisTmdb::$apiKey` y definir `pelisenpareja::$appUrl` con el dominio real.
+2. Confirmar la configuración privada de `PelisTmdb::$apiKey` en el servidor (el usuario ya rellenó el atributo local). `pelisenpareja::$appUrl` usa `https://pelisenpareja.alon.one`.
 3. Subir archivos PHP y cambios del router/webhook.
 4. Habilitar métodos Firebase y dominios autorizados.
 5. Comprobar transporte de correo y bot/webhook Telegram ya existente.
 6. Instalar cron de Telegram.
-7. Publicar `dist/pelis-en-pareja/browser` bajo HTTPS. Si cambia base path, usar `ng build --base-href /ruta/`.
+7. Subir el frontend a un repositorio con `main` y configurar GitHub Pages, dominio, DNS y HTTPS según `GITHUB_PAGES.md`. El workflow publica `dist/pelis-en-pareja/browser` con base `/`.
 8. Prueba real con dos cuentas verificadas y una plataforma: un sí de cada miembro, match, aviso y visto global.
 
 Ver `DESPLIEGUE.md` y `VALIDACION.md`. La vista local sirve para revisar el producto; no acredita despliegue en producción.

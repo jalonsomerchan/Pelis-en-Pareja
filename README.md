@@ -20,6 +20,16 @@ npm run preview
 
 La build instalable está en `dist/pelis-en-pareja/browser`. `preview` sirve esa build con su service worker en el puerto 4200. Node 24.15 o superior compatible con Angular 22; el equipo usa Node 24.18. No hace falta Angular CLI global.
 
+## Publicar en GitHub Pages
+
+Preparado para `https://pelisenpareja.alon.one`: el workflow `.github/workflows/deploy-pages.yml` prueba, compila y despliega al hacer push a `main`. La API sigue en `https://alon.one/api`.
+
+```bash
+npm run build:pages
+```
+
+Configura Pages, el dominio, DNS y Firebase siguiendo [GITHUB_PAGES.md](docs/GITHUB_PAGES.md). El sitio aún no se ha publicado.
+
 ## Configuración y puesta en marcha
 
 1. Ejecuta la [migración](database/README.md). **Pendiente de ejecución por el usuario en producción.**
@@ -40,7 +50,11 @@ La build instalable está en `dist/pelis-en-pareja/browser`. `preview` sirve esa
 - Países excluidos por origen/producción, incluidas coproducciones; no se confunde país con idioma.
 - Películas y series tienen IDs independientes. Los votos son por grupo, usuario, tipo e ID TMDB.
 - Hace falta un mínimo de dos miembros para un match. Entradas, salidas y cambios de voto recalculan el consenso.
-- Una película vista desaparece también de matches. Los votos no se muestran a los demás antes del consenso.
+- Una película vista desaparece también de matches y catálogos. Se conserva el historial en tus favoritos.
+- Los síes de otros miembros tienen prioridad entre las propuestas pendientes, sin repetir tus votos ni saltarse filtros.
+- Portada con pestañas Series, Películas y Todo; cambian tu vista, sin modificar preferencias del grupo.
+- Favoritos: selector Mis favoritos/Del grupo, lista paginada de tus síes o los de cualquier miembro y el voto de cada persona (quiere verla, no le apetece, vista o sin votar).
+- Plataformas: elegir una suscripción y explorar títulos por estreno reciente o popularidad TMDB, con filtros de series/películas/todo. No son cifras reales de reproducciones ni fechas de alta en las plataformas.
 - Avisos internos persistentes y Telegram mediante cola con reintentos. El navegador recibe avisos mientras la app está abierta; para avisos con la app cerrada se usa Telegram.
 - Sin conexión abre la interfaz previamente instalada; los votos requieren conexión. Los datos privados y el auth no se almacenan en la caché del service worker.
 - La PWA avisa cuando hay una actualización lista y permite recargarla.
@@ -52,7 +66,7 @@ npm test
 npm run build
 ```
 
-7 pruebas de gestos, duraciones, iconos PWA y privacidad de caché. El backend incluye 18 comprobaciones de integración con MySQL local desechable en `api/tests/pelisenpareja_consensus.php`; ese test requiere un socket local bajo `/tmp/pelisenpareja*.sock` y nunca conecta a producción.
+10 pruebas de gestos, prioridad sin duplicados, duraciones, iconos PWA y privacidad de caché. El backend incluye 18 comprobaciones de consenso y 26 de catálogo/favoritos en `api/tests/pelisenpareja_consensus.php` y `api/tests/pelisenpareja_catalog.php`; ambos requieren MySQL local desechable con socket bajo `/tmp/pelisenpareja*.sock` y nunca conectan a producción. El catálogo de prueba simula TMDB sin peticiones externas.
 
 Ver [VALIDACION.md](docs/VALIDACION.md) para las comprobaciones realizadas y sus límites. El catálogo vivo, el acceso Firebase, el correo y Telegram requieren el despliegue/configuración anterior.
 
@@ -62,4 +76,5 @@ Ver [VALIDACION.md](docs/VALIDACION.md) para las comprobaciones realizadas y sus
 - [ARQUITECTURA.md](docs/ARQUITECTURA.md): flujo de datos y consenso.
 - [API.md](docs/API.md): endpoints y contratos.
 - [DESPLIEGUE.md](docs/DESPLIEGUE.md): instalación PHP, MySQL, cron y PWA.
+- [GITHUB_PAGES.md](docs/GITHUB_PAGES.md): workflow, dominio personalizado y DNS del frontend.
 - `AGENTS.md`: instrucciones del repositorio para siguientes sesiones.
