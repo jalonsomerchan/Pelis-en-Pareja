@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import ts from 'typescript';
+const source=await readFile(new URL('../src/app/swipe.ts',import.meta.url),'utf8');
+const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+const {swipeDecision,duration}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+test('Deslizar horizontalmente permite aceptar y rechazar',()=>{assert.equal(swipeDecision(120,8),'like');assert.equal(swipeDecision(-120,-8),'dislike');});
+test('Desplazarse verticalmente nunca guarda un voto',()=>{assert.equal(swipeDecision(110,200),null);assert.equal(swipeDecision(-100,-180),null);});
+test('Un toque o movimiento corto nunca guarda un voto',()=>{assert.equal(swipeDecision(0,0),null);assert.equal(swipeDecision(94,0),null);assert.equal(swipeDecision(-94,0),null);assert.equal(swipeDecision(95,0),'like');});
+test('Un gesto diagonal ambiguo no guarda un voto',()=>{assert.equal(swipeDecision(100,85),null);assert.equal(swipeDecision(-100,85),null);});
+test('Las duraciones son legibles, incluidos episodios cortos',()=>{assert.equal(duration(169),'2 h 49 min');assert.equal(duration(60),'1 h');assert.equal(duration(45),'45 min');assert.equal(duration(null),'');});
