@@ -62,6 +62,7 @@ export class AppComponent implements OnDestroy {
   readonly installed = signal(window.matchMedia('(display-mode: standalone)').matches);
   readonly swipeX = signal(0);
   readonly animateDecision = signal<Decision | null>(null);
+  readonly animateTitleKey = signal<string | null>(null);
   readonly catalogBusy = signal(false);
   readonly settingsTab = signal<'platforms'|'filters'>('platforms');
   readonly emailVerified = signal(false);
@@ -286,13 +287,17 @@ export class AppComponent implements OnDestroy {
     const isDiscoverCard=this.view()==='discover'&&titleKey(this.current()??title)===key;
     this.pendingVoteKeys.add(localKey);this.pendingVotes.update(count=>count+1);
     this.busy.set(true);this.error.set('');this.swipeX.set(0);
-    if(isDiscoverCard){
-      this.localVoteKeys.add(localKey);
-      this.deck.update(all=>all.filter(t=>titleKey(t)!==key));
-      this.animateDecision.set(null);this.preloadNextPosters();
-      if(this.deck().length<3&&this.nextPage!==null)void this.loadMore();
-    }
+    let voteRequest:Promise<{result:{saved:boolean;matches:Match[]}}|{error:unknown}>|null=null;
     try{
+      if(!this.demo())voteRequest=this.api.post<{saved:boolean;matches:Match[]}>('vote',{group_id:groupId,media_type:title.media_type,tmdb_id:title.id,decision}).then(result=>({result}),error=>({error}));
+      if(isDiscoverCard){
+        this.localVoteKeys.add(localKey);this.animateTitleKey.set(key);this.animateDecision.set(decision);
+        const exitDuration=window.matchMedia('(prefers-reduced-motion: reduce)').matches?160:270;
+        await new Promise<void>(resolve=>window.setTimeout(resolve,exitDuration));
+        this.deck.update(all=>all.filter(t=>titleKey(t)!==key));
+        this.animateDecision.set(null);this.animateTitleKey.set(null);this.preloadNextPosters();
+        if(this.deck().length<3&&this.nextPage!==null)void this.loadMore();
+      }
       let matches:Match[]=[];
       if(this.demo()){
         this.demoVotes.set(key,decision);
@@ -304,8 +309,7 @@ export class AppComponent implements OnDestroy {
         }else if(decision!=='like')this.matches.update(all=>all.filter(item=>titleKey(item.title)!==key));
         this.groups.update(all=>all.map(g=>({...g,match_count:this.matches().length})));
       }else{
-        const result=await this.api.post<{saved:boolean;matches:Match[]}>('vote',{group_id:groupId,media_type:title.media_type,tmdb_id:title.id,decision});
-        matches=result.matches;
+        const result=await voteRequest!;if('error'in result)throw result.error;matches=result.result.matches;
       }
       this.localVoteKeys.add(localKey);
       this.deck.update(all=>all.filter(item=>titleKey(item)!==key));
@@ -331,7 +335,7 @@ export class AppComponent implements OnDestroy {
         }
         this.setError(e);
       }
-    }finally{this.pendingVoteKeys.delete(localKey);this.pendingVotes.update(count=>Math.max(0,count-1));this.busy.set(this.pendingVotes()>0);this.animateDecision.set(null);}
+    }finally{this.pendingVoteKeys.delete(localKey);this.pendingVotes.update(count=>Math.max(0,count-1));this.busy.set(this.pendingVotes()>0);}
     if(this.view()==='discover'&&this.deck().length<3&&this.nextPage!==null)void this.loadMore();
     if(isDiscoverCard&&(decision==='like'||decision==='seen')){if(this.demo())void this.loadMore();else void this.refreshTasteOrder();}
   }
@@ -339,6 +343,7 @@ export class AppComponent implements OnDestroy {
   pointerMove(e:PointerEvent){if(this.dragging?.id===e.pointerId)this.swipeX.set(e.clientX-this.dragging.x);}
   pointerUp(e:PointerEvent){if(this.dragging?.id!==e.pointerId)return;const d=swipeDecision(e.clientX-this.dragging.x,e.clientY-this.dragging.y);this.dragging=null;this.swipeX.set(0);if(d)void this.vote(d);}
   pointerCancel(){this.dragging=null;this.swipeX.set(0);}
+  isCardExiting(decision:Decision,title:Title){return this.animateDecision()===decision&&this.animateTitleKey()===titleKey(title);}
   cardTransform(){const x=this.swipeX();return `translateX(${x}px) rotate(${x/24}deg)`;}
   async loadMatches(){if(!this.group() || this.demo())return;const id=this.groupId()!;try{const r=await this.api.get<{matches:Match[]}>('matches',{group_id:id});if(id===this.groupId()){this.matches.set(r.matches);this.groups.update(all=>all.map(g=>g.id===id?{...g,match_count:r.matches.length}:g));}}catch(e){this.setError(e);}}
   async loadStatistics(){if(!this.group())return;const id=this.groupId()!;const epoch=++this.statisticsEpoch;this.statisticsBusy.set(true);try{const result=this.demo()?this.demoStatistics():await this.api.get<GroupStatistics>('statistics',{group_id:id});if(epoch===this.statisticsEpoch&&id===this.groupId())this.statistics.set(result);}catch(e){if(epoch===this.statisticsEpoch)this.setError(e);}finally{if(epoch===this.statisticsEpoch)this.statisticsBusy.set(false);}}
