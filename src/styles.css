@@ -159,3 +159,5 @@
   .discover-layout:not(.has-card) .empty-deck{flex:1;height:auto;max-height:none;min-height:280px}
 }
 @media(max-width:390px){.content.discovering{padding-left:16px;padding-right:16px}}
+@media(max-width:760px){.mobile-brand{font-size:clamp(16px,5.2vw,21px);gap:7px;flex-shrink:1}}
+@media(max-width:390px){.topbar{padding-inline:16px}.topbar-right{gap:8px}.mobile-menu-toggle{width:32px;height:32px}.notification-button{width:30px;height:30px}.topbar-right .mobile-avatar{width:28px;height:28px;font-size:11px}}
