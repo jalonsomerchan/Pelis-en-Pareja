@@ -1,6 +1,6 @@
 export type MediaType = 'movie' | 'tv';
 export type MediaFilter = MediaType | 'both' | 'reality';
-export type View = 'discover' | 'favorites' | 'platforms' | 'matches' | 'group' | 'settings';
+export type View = 'discover' | 'favorites' | 'platforms' | 'matches' | 'statistics' | 'group' | 'settings';
 export type Decision = 'like' | 'dislike' | 'seen';
 export interface Provider {provider_id: number; provider_name: string; logo_path: string;}
 export interface Genre {id: number; name: string;}
@@ -15,6 +15,10 @@ export interface Match {id: number; created_at: string; title: Title;}
 export interface MemberVote {uid: string; display_name: string; decision: Decision | null;}
 export interface Favorite {title: Title; liked_at: string; seen: boolean; matched: boolean; votes: MemberVote[];}
 export interface FavoritesPage {items: Favorite[]; next_page: number | null;}
+export type StatisticsDecision = 'like' | 'dislike' | 'seen' | 'match';
+export interface StatisticsItem {id: number | string; name: string; count: number;}
+export interface StatisticsBucket {decision: StatisticsDecision; title_count: number; genres: StatisticsItem[]; countries: StatisticsItem[]; platforms: StatisticsItem[];}
+export interface GroupStatistics {statuses: StatisticsBucket[];}
 export interface AppNotification {id: number | string; group_id: number | string; match_id: number | string; message: string; read_at: string | null; created_at: string; active: number | string;}
 export interface TelegramStatus {configured: boolean; linked: boolean; enabled: boolean; username: string | null;}
 export interface Bootstrap {user: AppUser; groups: Group[]; invitations: Invitation[]; telegram: TelegramStatus; tmdb_configured: boolean;}
