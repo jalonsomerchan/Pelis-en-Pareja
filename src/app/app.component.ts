@@ -609,6 +609,7 @@ export class AppComponent implements OnDestroy {
   private async browserNotification(n:AppNotification){try{const reg=await navigator.serviceWorker.getRegistration();if(reg)await reg.showNotification('¡Tenéis un match!',{body:n.message,icon:'icons/icon-192.png',tag:'pp-'+n.id});else new Notification('¡Tenéis un match!',{body:n.message,tag:'pp-'+n.id});}catch{/* In-app and Telegram notifications remain available. */}}
   image(path:string | null,size='w780'){return path ? `https://image.tmdb.org/t/p/${size}${path}` : 'icons/icon.svg';}
   safeWatch(url:string){try{const u=new URL(url);return u.protocol==='https:'&&['www.themoviedb.org','themoviedb.org'].includes(u.hostname)?u.href:'https://www.themoviedb.org';}catch{return 'https://www.themoviedb.org';}}
+  tmdbTitleUrl(title:Pick<Title,'media_type'|'id'>){const id=Number(title.id);return Number.isSafeInteger(id)&&id>0?`https://www.themoviedb.org/${title.media_type==='movie'?'movie':'tv'}/${id}`:'https://www.themoviedb.org';}
   private preloadNextPosters(titles=this.deck()){
     const sources=new Set(titles.slice(1,4).map(title=>title.poster_path?this.image(title.poster_path):'').filter(Boolean));
     for(const source of this.posterPreloads.keys())if(!sources.has(source))this.posterPreloads.delete(source);
