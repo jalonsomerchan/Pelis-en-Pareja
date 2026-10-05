@@ -10,8 +10,10 @@ PelisCatalog.php
 PelisTelegram.php
 migrations/20261004_pelisenpareja.sql
 migrations/20261005_pelisenpareja_similar.sql
+migrations/20261005_pelisenpareja_catalog_sync.sql
 cron/pelisenpareja_migrate.php
 cron/pelisenpareja_notifications.php
+cron/pelisenpareja_catalog_sync.php
 ```
 
 Cambios mínimos en archivos existentes:
@@ -42,6 +44,26 @@ Añadir un cron cada minuto en el servidor, ajustando las rutas reales:
 ```
 
 Ejecutar manualmente una vez permite revisar el resultado JSON `sent`, `failed`, `checked`. Solo se envía a personas que hayan conectado su Telegram desde la app y tengan avisos activos. El worker no está instalado en producción en esta sesión.
+
+## Índice del catálogo
+
+Tras ejecutar `20261005_pelisenpareja_catalog_sync.sql`, configura el worker
+CLI cada minuto para recorrer las selecciones activas de región y plataformas:
+
+```cron
+* * * * * /usr/bin/php /RUTA/API/cron/pelisenpareja_catalog_sync.php >> /RUTA/LOGS/pelisenpareja-catalog.log 2>&1
+```
+
+Usa PHP 7.4 con mysqli/mysqlnd y cURL. Cada ejecución avanza hasta cinco
+páginas por región, agrupando las plataformas actualmente seleccionadas en sus
+grupos; al completar el primer recorrido, comienza una actualización diaria.
+Descubrir usa los registros locales desde el primer momento y se va llenando
+conforme avanza este worker.
+El script devuelve un resumen JSON al ejecutarlo a mano, no requiere Firebase
+y sale con código 1 si falta la migración o falla una región. No se ha
+instalado este cron en producción. Para una ejecución puntual también queda
+`POST /pelisenpareja/sync_catalog`, que requiere sesión Firebase y pertenencia
+al grupo.
 
 ## Frontend
 

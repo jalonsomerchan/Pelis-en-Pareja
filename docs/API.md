@@ -19,12 +19,13 @@ Base: `{API_BASE}/pelisenpareja`. Router Flight existente. GET y POST según tab
 | GET | catalog | group_id, region opcional | providers, movie_genres, tv_genres, countries |
 | POST | settings | group_id, name, region, media_type, providers, excluded_genres, excluded_countries | group |
 | GET | discover | group_id, page (1–500), media_type opcional; búsqueda Filter opcional: filter=1, provider_id, countries, genres, date_from, date_to, sort_by | titles, next_page, filter_version, reason |
+| POST | sync_catalog | group_id, pages opcional (1–5) | estado del índice y páginas procesadas |
 | GET | similar | group_id, media_type (movie/tv), tmdb_id, page opcional (1–500) | resultados de TMDB y relaciones guardadas |
 | GET | similar_feed | group_id, media_type (movie/tv/both/reality), page (1–20) | titles, next_page, filter_version, reason |
 | GET | priorities | group_id, media_type opcional | titles prioritarios, filter_version |
 | GET | favorites | group_id, page (1–500), scope (mine/group) | items (30 por página), next_page |
 | GET | platforms | group_id, provider_id, mode (recent/popular), media_type opcional, page | titles, next_page, filter_version, reason |
-| GET | state | group_id, media_type opcional, titles (lista movie:ID,tv:ID, máximo 60) | group, hidden, seen, priority_keys |
+| GET | state | group_id, media_type opcional, titles (lista movie:ID,tv:ID, máximo 60) | group, hidden, seen, priority_keys, taste_version |
 | POST | vote | group_id, media_type, tmdb_id, decision | saved, matches nuevos |
 | GET | matches | group_id | matches activos |
 | GET | notifications | — | últimos 100 avisos propios |
@@ -35,11 +36,15 @@ Base: `{API_BASE}/pelisenpareja`. Router Flight existente. GET y POST según tab
 
 `settings.media_type`: `movie`, `tv` o `both`. `vote.media_type`: `movie` o `tv`. `decision`: `like`, `dislike` o `seen`. `providers` y `excluded_genres` son arrays de IDs numéricos de TMDB. `excluded_countries` y `region` usan ISO 3166-1 de dos letras.
 
-`reason` del mazo puede ser `providers_required`, `exhausted` o null. Un lote vacío con `next_page` no significa fin: se puede seguir buscando. Un título contiene `id`, `media_type`, `title`, `overview`, carteles, fecha, puntuación, duración/temporadas, géneros, países y proveedores.
+`reason` del mazo puede ser `providers_required`, `catalog_sync_required`, `catalog_syncing`, `exhausted` o null. Un lote vacío con `next_page` no significa fin: se puede seguir buscando.
 
 Los matches devueltos al votar son únicamente los que acaba de crear esa operación. La lista completa se obtiene en `matches`.
 
 `discover`/`priorities`/`platforms` aceptan `media_type=movie|tv|both`; si se omite, usan el tipo del grupo. El filtro de la petición no cambia el grupo. Prioridad: síes de miembros actuales, sin voto propio ni visto global, ordenados por cantidad de síes y recencia. Se revalida disponibilidad y exclusiones antes de registrar la oferta. La mezcla favorece dos títulos con síes por cada título general, sin duplicados. `group_likes` señala el número de síes en las propuestas prioritarias.
+
+El mazo general de `discover` siempre selecciona sus candidatos desde `pp_catalog_items`, también durante la primera sincronización; no consulta en vivo `discover/{movie,tv}`. Ordena por afinidad de géneros: sí propio (peso 4), visto propio (1), sí de miembro actual (2) y visto de otro miembro actual (0.5), normalizado por los géneros del candidato. Después desempata por popularidad. Si ningún género coincide, el respaldo es popularidad del índice. Los síes ajenos se siguen mostrando como prioridades exactas; los títulos vistos globalmente se excluyen. `catalog_syncing` indica que el cron aún está llenando el índice y `catalog_sync_required` que falta su migración.
+
+`POST sync_catalog` actualiza incrementalmente los proveedores del grupo; requiere sesión Firebase y pertenencia al grupo. Repetir mientras `data.sync_in_progress` sea `true`. El cron `cron/pelisenpareja_catalog_sync.php` actualiza automáticamente las selecciones activas sin sesión y es el modo recomendado de operación; las instrucciones están en `docs/DESPLIEGUE.md`. Requiere ejecutar `20261005_pelisenpareja_catalog_sync.sql`.
 
 `discover?filter=1` ejecuta una búsqueda personal de `movie`, `tv` o `reality`, sin prioridades ni cambios a los ajustes del grupo. Requiere `provider_id` de una plataforma elegida en el grupo. `countries` admite códigos separados por `|` de US, ES, GB, FR, KR y DE; `genres` admite IDs separados por `|`. Cada lista usa coincidencia con cualquiera de sus valores, y se siguen aplicando las exclusiones compartidas. `date_from` y `date_to` usan `YYYY-MM-DD`; se filtra la fecha original de estreno o emisión y `date_to` por defecto es hoy. `sort_by` admite `popularity.desc`, `revenue.desc` (solo películas), `vote_average.desc` o `vote_count.desc`. Los resultados omiten títulos ya vistos o votados por esa persona y registran una oferta para que se puedan votar desde Filter. No requiere migración.
 
@@ -51,7 +56,7 @@ Los matches devueltos al votar son únicamente los que acaba de crear esa operac
 
 `platforms.provider_id` debe estar entre las plataformas elegidas del grupo. `recent` ordena por estreno original, sin fechas futuras; `popular` por popularidad TMDB. No representan fechas de incorporación a una plataforma ni sus cifras de reproducciones. Se aplican exclusiones del grupo y se eliminan vistos. Los títulos incluyen `my_decision` y registran oferta para poder votar desde esta página; aquí pueden verse títulos que ya votaste.
 
-`state.hidden` retira vistos y votos propios del mazo; `state.seen` retira solo vistos de los catálogos. `priority_keys` son pistas de síes pendientes para consultar `priorities` cuando cambien; no autorizan un voto por sí solas. Un voto previamente guardado permite reconsiderarlo desde el historial aunque hayan cambiado filtros; los vistos siguen bloqueando nuevos síes/noes. Sin voto previo se exige una oferta vigente, salvo marcar un match como visto.
+`state.hidden` retira vistos y votos propios del mazo; `state.seen` retira solo vistos de los catálogos. `priority_keys` son pistas de síes pendientes para consultar `priorities` cuando cambien; no autorizan un voto por sí solas. `taste_version` cambia cuando se registra actividad de voto o visto de un miembro actual, para que Descubrir recalcule su orden. Un voto previamente guardado permite reconsiderarlo desde el historial aunque hayan cambiado filtros; los vistos siguen bloqueando nuevos síes/noes. Sin voto previo se exige una oferta vigente, salvo marcar un match como visto.
 
 ## Permisos
 
@@ -68,4 +73,4 @@ Un usuario ajeno no recibe datos del grupo. La lista de invitaciones con emails 
 - 429 `RATE_LIMIT`: reenvío de la misma invitación antes de 60 segundos.
 - 503 `TMDB_NOT_CONFIGURED`, `TMDB_UNAVAILABLE`.
 
-Los scripts `cron/pelisenpareja_migrate.php`, `cron/pelisenpareja_notifications.php` y el test de integración son **solo CLI** y responden 404 si se intentan invocar por HTTP.
+Los scripts `cron/pelisenpareja_migrate.php`, `cron/pelisenpareja_notifications.php`, `cron/pelisenpareja_catalog_sync.php` y el test de integración son **solo CLI** y responden 404 si se intentan invocar por HTTP.

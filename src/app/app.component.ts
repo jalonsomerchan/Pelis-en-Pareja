@@ -30,6 +30,7 @@ export class AppComponent implements OnDestroy {
   readonly pendingVotes = signal(0);
   readonly loadingDeck = signal(false);
   readonly deck = signal<Title[]>([]);
+  readonly discoverReason = signal<string | null>(null);
   readonly current = computed(() => this.deck()[0] ?? null);
   readonly discoverMedia = signal<MediaFilter>('both');
   readonly similarMedia = signal<MediaFilter>('both');
@@ -128,6 +129,7 @@ export class AppComponent implements OnDestroy {
   private catalogEpoch = 0;
   private localVoteKeys = new Set<string>();
   private discoveryPrefetches = new Map<string,Promise<void>>();
+  private lastDiscoveryTasteKey='';
   private newsPrefetches = new Map<string,Promise<void>>();
   private posterPreloads = new Map<string,HTMLImageElement>();
   private pendingVoteKeys = new Set<string>();
@@ -171,7 +173,7 @@ export class AppComponent implements OnDestroy {
     if(token && this.emailVerified()){await this.acceptInvitation(undefined,token);const url=new URL(location.href);url.searchParams.delete('invitation');history.replaceState(null,'',url);}
     await this.loadNotifications();
   }
-  enterDemo(){this.demoVotes.clear();this.demoLikes.clear();this.favorites.set([]);this.favoritesPage.set(1);this.platformProvider.set(null);this.filterProviderId.set(null);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterStep.set(0);this.discoverMedia.set('both');this.similarMedia.set('both');this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.demo.set(true);this.error.set('');this.initializing.set(false);this.user.set({uid:'demo',display_name:'Tú',email:'demo@ejemplo.es',photo_url:''});this.groups.set([structuredClone(DEMO_GROUP)]);this.groupId.set(1);this.catalog.set(structuredClone(DEMO_CATALOG));this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.tmdbConfigured.set(true);this.telegram.set({configured:false,linked:false,enabled:true,username:null});this.view.set('discover');this.setDraft(this.group()!);void this.reloadDeck();this.notify('Modo demo: los votos y matches son una simulación.');}
+  enterDemo(){this.demoVotes.clear();this.demoLikes.clear();this.discoverReason.set(null);this.favorites.set([]);this.favoritesPage.set(1);this.platformProvider.set(null);this.filterProviderId.set(null);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterStep.set(0);this.discoverMedia.set('both');this.similarMedia.set('both');this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.demo.set(true);this.error.set('');this.initializing.set(false);this.user.set({uid:'demo',display_name:'Tú',email:'demo@ejemplo.es',photo_url:''});this.groups.set([structuredClone(DEMO_GROUP)]);this.groupId.set(1);this.catalog.set(structuredClone(DEMO_CATALOG));this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.tmdbConfigured.set(true);this.telegram.set({configured:false,linked:false,enabled:true,username:null});this.view.set('discover');this.setDraft(this.group()!);void this.reloadDeck();this.notify('Modo demo: los votos y matches son una simulación.');}
   private clearSession(){this.localVoteKeys.clear();this.epoch++;this.activeDiscoveryKey='';this.nextPage=1;this.favoriteEpoch++;this.platformEpoch++;this.newsEpoch++;this.similarEpoch++;this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.filterEpoch++;this.filterBusy.set(false);this.statisticsEpoch++;this.statistics.set(null);this.statisticsBusy.set(false);this.favorites.set([]);this.platformTitles.set([]);this.newsTitles.set([]);this.newsNext.set(1);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterEncounteredResults.set(false);this.detailTitle.set(null);this.user.set(null);this.groups.set([]);this.groupId.set(null);this.deck.set([]);this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.catalog.set(null);this.showGroupForm.set(false);this.closeOverlays();this.primedNotifications=false;this.notificationIds.clear();}
   async logout(){await this.operation(async()=>{if(!this.demo())await this.api.logout();this.demo.set(false);this.clearSession();this.view.set('discover');});}
   async switchGroup(value:string){if(this.busy())return;const id=Number(value);if(!this.groups().some(g=>g.id===id))return;this.localVoteKeys.clear();this.epoch++;this.favoriteEpoch++;this.platformEpoch++;this.newsEpoch++;this.similarEpoch++;this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.filterEpoch++;this.filterBusy.set(false);this.statisticsEpoch++;this.statistics.set(null);this.favorites.set([]);this.favoritesPage.set(1);this.platformTitles.set([]);this.newsTitles.set([]);this.newsNext.set(1);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterEncounteredResults.set(false);this.platformProvider.set(null);this.filterProviderId.set(null);this.groupId.set(id);this.discoverMedia.set(this.savedDiscoverMedia(this.group()!));this.similarMedia.set(this.group()!.media_type);if(!this.demo())localStorage.setItem('pelis.activeGroup',String(id));this.catalog.set(null);this.setDraft(this.group()!);this.showDetail.set(false);this.showMatch.set(null);this.error.set('');await this.refreshView();}
@@ -204,7 +206,7 @@ export class AppComponent implements OnDestroy {
       if(id!==this.groupId())return;
       this.updateGroup(r.group);
       const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);
-      this.epoch++;this.prioritySignature='';this.deck.set([]);this.nextPage=1;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());this.clearDiscoveryCheckpoint(id,this.discoverMedia());
+      this.epoch++;this.prioritySignature='';this.discoverReason.set(null);this.deck.set([]);this.nextPage=1;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());this.clearDiscoveryCheckpoint(id,this.discoverMedia());
       this.matches.set([]);this.favorites.set([]);this.favoriteEpoch++;this.favoritesPage.set(1);this.favoritesNext.set(null);this.favoritesBusy.set(false);
       this.platformEpoch++;this.platformTitles.set([]);this.platformNext.set(null);this.platformBusy.set(false);
       void this.loadNotifications().catch(e=>this.setError(e));
@@ -288,7 +290,7 @@ export class AppComponent implements OnDestroy {
     else{const r=await this.api.post<{group:Group}>('settings',{group_id:g.id,...this.draft});this.updateGroup(r.group);this.notify('Preferencias guardadas para todo el grupo.');}
     this.discoverMedia.set(this.draft.media_type);this.saveDiscoverMedia(this.groupId()!,this.draft.media_type);this.similarMedia.set(this.draft.media_type);this.view.set('discover');await this.reloadDeck();
   });}
-  async reloadDeck(){this.epoch++;this.prioritySignature='';this.clearDiscoveryCheckpoint();this.deck.set([]);this.nextPage=1;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(this.groupId()??-1,this.discoverMedia());await this.loadMore();}
+  async reloadDeck(){this.epoch++;this.prioritySignature='';this.discoverReason.set(null);this.clearDiscoveryCheckpoint();this.deck.set([]);this.nextPage=1;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(this.groupId()??-1,this.discoverMedia());await this.loadMore();}
   async changeDiscoverMedia(media:MediaFilter){if(this.busy()||this.discoverMedia()===media)return;this.saveDiscoveryCheckpoint();this.discoverMedia.set(media);if(this.groupId()!==null)this.saveDiscoverMedia(this.groupId()!,media);this.showDetail.set(false);await this.resumeDeck();}
   async changeSimilarMedia(media:MediaFilter){if(this.similarBusy()||this.similarMedia()===media)return;this.similarMedia.set(media);await this.loadSimilarFeed(1);}
   async loadSimilarFeed(page=1){
@@ -421,7 +423,7 @@ export class AppComponent implements OnDestroy {
     if(this.demo()){if(!this.deck().length)await this.loadMore();return;}
     const key=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());
     if(this.activeDiscoveryKey!==key){
-      this.epoch++;this.activeDiscoveryKey=key;this.deck.set([]);this.nextPage=1;
+      this.epoch++;this.activeDiscoveryKey=key;this.discoverReason.set(null);this.deck.set([]);this.nextPage=1;
       const saved=this.readDiscoveryCheckpoint(id,this.discoverMedia());
       if(saved){this.nextPage=saved.next_page;this.deck.set(saved.titles.filter(title=>!this.localVoteKeys.has(id+':'+titleKey(title))));}
     }
@@ -445,20 +447,22 @@ export class AppComponent implements OnDestroy {
       const priority=titles.filter(t=>DEMO_PARTNER_VOTES[titleKey(t)]==='like').map(t=>({...t,group_likes:1}));const priorityKeys=new Set(priority.map(titleKey));
       this.deck.set(mergePriorities([], [...priority,...this.demoSortByTaste(titles.filter(t=>!priorityKeys.has(titleKey(t))))]));this.preloadNextPosters();this.nextPage=null;return;
     }
-    if(this.nextPage===null || !this.tmdbConfigured())return;const epoch=this.epoch;const id=this.groupId()!;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());this.loadingDeck.set(true);this.error.set('');
+    if(this.nextPage===null)return;const epoch=this.epoch;const id=this.groupId()!;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());this.loadingDeck.set(true);this.error.set('');
     const media=this.discoverMedia();const fillingInitialDeck=this.deck().length===0;const maxRounds=fillingInitialDeck?6:1;
     let loaded=false;
     try{
       let rounds=0;
       do{
-        const r=await this.discoverPage(id,media,this.nextPage ?? 1);
+        const requestedPage=this.nextPage ?? 1;const r=await this.discoverPage(id,media,requestedPage);
         if(epoch!==this.epoch||id!==this.groupId())return;
+        this.discoverReason.set(r.reason);
         this.nextPage=r.next_page;
         this.deck.update(all=>{const known=new Set(all.map(titleKey));return [...all,...r.titles.filter(t=>!known.has(titleKey(t))&&!this.localVoteKeys.has(id+':'+titleKey(t)))];});
         this.preloadNextPosters();
         if(this.group()?.filter_version!==r.filter_version){this.groups.update(all=>all.map(g=>g.id===id?{...g,filter_version:r.filter_version}:g));}
         this.saveDiscoveryCheckpoint();
         rounds++;
+        if(r.reason==='catalog_syncing'&&r.next_page===requestedPage)break;
       }while(this.nextPage!==null && rounds<maxRounds && (fillingInitialDeck?needsInitialCoverage(this.deck(),media):!this.deck().length));
       loaded=true;
     }catch(e){this.setError(e);}finally{this.loadingDeck.set(false);if(loaded)this.prefetchNextDiscoverPage();if((epoch!==this.epoch||id!==this.groupId())&&this.user()&&this.group()&&this.view()==='discover')void this.resumeDeck();}
@@ -591,10 +595,15 @@ export class AppComponent implements OnDestroy {
   private async poll(){if(this.polling||this.busy()||!this.user()||this.demo()||!this.online()||document.visibilityState!=='visible')return;this.polling=true;try{
     await this.loadNotifications();const id=this.groupId();if(id){
       const visible=this.view()==='platforms'?[...this.platformTitles(),...this.deck()]:this.view()==='news'?[...this.newsTitles(),...this.deck()]:this.view()==='filter'?[...this.filterTitles(),...this.deck()]:this.view()==='similar'?[...this.similarTitles(),...this.deck()]:[...this.deck(),...this.platformTitles()];
-      const keys=[...new Set(visible.map(titleKey))].slice(0,60).join(',');const r=await this.api.get<{group:Group;hidden:string[];seen:string[];priority_keys:string[]}>('state',{group_id:id,titles:keys,media_type:this.discoverMedia()});if(id!==this.groupId()||this.busy())return;
+      const keys=[...new Set(visible.map(titleKey))].slice(0,60).join(',');const r=await this.api.get<{group:Group;hidden:string[];seen:string[];priority_keys:string[];taste_version:string}>('state',{group_id:id,titles:keys,media_type:this.discoverMedia()});if(id!==this.groupId()||this.busy())return;
+      const tasteKey=`${id}:${r.taste_version??''}`;const tasteChanged=!!this.lastDiscoveryTasteKey&&this.lastDiscoveryTasteKey!==tasteKey;this.lastDiscoveryTasteKey=tasteKey;
       const version=this.group()?.filter_version;this.groups.update(all=>all.map(g=>g.id===id?r.group:g));this.deck.update(all=>all.filter(t=>!r.hidden.includes(`${t.media_type}:${t.id}`)));this.preloadNextPosters();this.saveDiscoveryCheckpoint();this.platformTitles.update(all=>all.filter(t=>!(r.seen ?? []).includes(titleKey(t))));this.newsTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));this.filterTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));this.similarTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));
       if(version!==r.group.filter_version){const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);if(this.view()==='discover')await this.reloadDeck();if(this.view()==='similar')await this.loadSimilarFeed(this.similarPage());if(this.view()==='platforms'){this.catalog.set(null);await this.loadPlatformFeed();}if(this.view()==='news')await this.loadNews();if(this.view()==='filter'&&this.filterHasSearched())await this.searchFilter();}
-      if(this.view()==='discover')await this.refreshPriorities(r.priority_keys ?? []);
+      if(this.view()==='discover'){
+        await this.refreshPriorities(r.priority_keys ?? []);
+        if(tasteChanged&&this.deck().length)await this.refreshTasteOrder();
+        if(this.discoverReason()==='catalog_syncing'&&this.deck().length<3&&this.nextPage!==null&&!this.loadingDeck())await this.loadMore();
+      }
       if(this.view()==='matches')await this.loadMatches();if(this.view()==='favorites')await this.loadFavorites();if(this.view()==='statistics')await this.loadStatistics();}
     if(this.telegramLink){const b=await this.api.get<Bootstrap>('bootstrap');this.telegram.set(b.telegram);if(b.telegram.linked)this.telegramLink='';}
   }catch(e){if(e instanceof ApiError && e.status===403){this.groupId.set(null);await this.bootstrap();}/* Temporary poll failures leave the current screen usable. */}finally{this.polling=false;}}

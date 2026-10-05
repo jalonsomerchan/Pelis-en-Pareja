@@ -38,7 +38,7 @@ Configura Pages, el dominio, DNS y Firebase siguiendo [GITHUB_PAGES.md](docs/GIT
 4. Revisa `public/runtime-config.js`: configuración pública Firebase del proyecto existente `alonsoftware` y URL base de la API. En localhost usa `http://localhost/OV2/api`; en otros dominios, `https://alon.one/api`. Si MAMP escucha en 8888, cambia la URL local. MAMP debe estar arrancado para los flujos reales.
 5. En Firebase Authentication, habilita Google y correo/contraseña y autoriza el dominio donde publiques la PWA y los dominios locales usados. El registro por correo envía verificación y el login entrega el ID token a `auth/login`.
 6. Configura `$appUrl` en la clase `pelisenpareja` con la URL definitiva del frontend. Por defecto: `https://pelisenpareja.alon.one`. Publica la build allí, sobre HTTPS.
-7. Instala el cron de avisos Telegram cada minuto. Reutiliza el bot, la configuración y el webhook de `telegram.php`, sin crear un bot nuevo. Los pasos están en [DESPLIEGUE.md](docs/DESPLIEGUE.md).
+7. Instala el cron de avisos Telegram cada minuto; reutiliza el bot, la configuración y el webhook de `telegram.php`, sin crear otro bot. Instala también el cron del catálogo después de aplicar su migración. Los pasos están en [DESPLIEGUE.md](docs/DESPLIEGUE.md).
 8. El servidor debe tener un transporte de correo operativo para `mail()`. Si no acepta el envío, la invitación se guarda y la app permite copiar el enlace, indicando que el correo no se envió.
 
 ## Comportamiento
@@ -66,7 +66,7 @@ npm test
 npm run build
 ```
 
-10 pruebas de gestos, prioridad sin duplicados, duraciones, iconos PWA y privacidad de caché. El backend incluye 18 comprobaciones de consenso y 26 de catálogo/favoritos en `api/tests/pelisenpareja_consensus.php` y `api/tests/pelisenpareja_catalog.php`; ambos requieren MySQL local desechable con socket bajo `/tmp/pelisenpareja*.sock` y nunca conectan a producción. El catálogo de prueba simula TMDB sin peticiones externas.
+11 pruebas de gestos, prioridad sin duplicados, duraciones, iconos PWA y privacidad de caché. El backend incluye 18 comprobaciones de consenso y 46 de catálogo/favoritos en `api/tests/pelisenpareja_consensus.php` y `api/tests/pelisenpareja_catalog.php`; ambos requieren MySQL local desechable con socket bajo `/tmp/pelisenpareja*.sock` y nunca conectan a producción. El catálogo de prueba simula TMDB sin peticiones externas.
 
 Ver [VALIDACION.md](docs/VALIDACION.md) para las comprobaciones realizadas y sus límites. El catálogo vivo, el acceso Firebase, el correo y Telegram requieren el despliegue/configuración anterior.
 
