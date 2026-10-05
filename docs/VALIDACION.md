@@ -23,6 +23,6 @@
 
 ## Pendiente de infraestructura
 
-La migración de producción la ejecutará el usuario. No se ha publicado frontend/backend ni instalado el cron en esta sesión. Para Pages siguen pendientes el repositorio/remoto, la configuración de Pages, el DNS, HTTPS y la autorización del dominio en Firebase. El usuario ha rellenado el atributo TMDB local; la cartelera real y su configuración en producción no se han comprobado. No se han emitido correos ni mensajes Telegram reales. Estas nuevas funciones reutilizan las tablas iniciales y no requieren otra migración.
+La migración de producción la ejecutará el usuario. No se ha publicado frontend/backend ni instalado el cron en esta sesión. Para Pages siguen pendientes el repositorio/remoto, la configuración de Pages, el DNS, HTTPS y la autorización del dominio en Firebase. El usuario ha rellenado el atributo TMDB local; la cartelera real y su configuración en producción no se han comprobado. No se han emitido correos ni mensajes Telegram reales. El endpoint Similar requiere además ejecutar `20261005_pelisenpareja_similar.sql` para crear `pp_similar`.
 
 Por ello, el acceso Firebase completo contra la nueva API, la cartelera real, la recepción de emails y los avisos Telegram deberán comprobarse tras configurar y desplegar. El modo demo permite revisar el producto mientras tanto y se identifica siempre como simulación.

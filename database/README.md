@@ -2,9 +2,12 @@
 
 La migración **no está aplicada en producción**. El 4 de octubre de 2026 el usuario pidió dejar los archivos para ejecutarla personalmente tras fallar el acceso SSH.
 
-Archivo: `migrations/20261004_pelisenpareja.sql`. Copia idéntica en `/Applications/MAMP/htdocs/OV2/api/migrations/20261004_pelisenpareja.sql`.
+Migraciones, en orden:
 
-Crea la base `pelisenpareja` si no existe y 12 tablas `pp_*`. Es idempotente, usa InnoDB y utf8mb4 y no elimina datos ni modifica las tablas de otras aplicaciones. Probada con MySQL 5.7.44.
+- `migrations/20261004_pelisenpareja.sql`: crea la base y las 12 tablas iniciales.
+- `migrations/20261005_pelisenpareja_similar.sql`: crea `pp_similar` para persistir las relaciones TMDB. Copia idéntica en `/Applications/MAMP/htdocs/OV2/api/migrations/`.
+
+Son idempotentes, usan InnoDB y utf8mb4 y no eliminan datos ni modifican las tablas de otras aplicaciones. La migración base se probó con MySQL 5.7.44. En producción quedan pendientes hasta que las ejecute el usuario.
 
 ## Ejecutar en el servidor
 
@@ -12,18 +15,18 @@ Con un usuario MySQL con permiso para crear la base y las tablas:
 
 ```bash
 mysql -u jorge -p < migrations/20261004_pelisenpareja.sql
-mysql -u jorge -p pelisenpareja < verify.sql
+mysql -u jorge -p pelisenpareja < migrations/20261005_pelisenpareja_similar.sql
 ```
 
 Introduce la contraseña cuando MySQL la pida. No se guardan credenciales en este proyecto.
 
-También existe `api/cron/pelisenpareja_migrate.php`, solo CLI, que reutiliza la conexión de `BaseControler.php`. Ejecutarlo desde el servidor que tenga acceso a esa conexión:
+También existe `api/cron/pelisenpareja_migrate.php`, solo CLI, que aplica en orden todos los SQL de `api/migrations/` mediante la conexión de `BaseControler.php`. Ejecutarlo desde el servidor que tenga acceso a esa conexión:
 
 ```bash
 php /RUTA/API/cron/pelisenpareja_migrate.php
 ```
 
-El script enumera las tablas tras completar la migración. Si aparecen 12 tablas, el esquema base está preparado. La cuenta usada por la aplicación necesita SELECT, INSERT, UPDATE y DELETE en `pelisenpareja`; la migración requiere además CREATE.
+El script enumera las tablas tras completar las migraciones. Al aparecer 13 tablas, el esquema actual está preparado. La cuenta usada por la aplicación necesita SELECT, INSERT, UPDATE y DELETE en `pelisenpareja`; las migraciones requieren además CREATE.
 
 ## Tablas
 
@@ -41,5 +44,6 @@ El script enumera las tablas tras completar la migración. Si aparecen 12 tablas
 | pp_telegram_tokens | Tokens de vinculación de un uso y 10 minutos |
 | pp_cache | Caché TMDB compartida del servidor |
 | pp_offers | Propuestas ofrecidas al usuario y versión de filtros |
+| pp_similar | Relaciones TMDB entre títulos, con página y posición |
 
 No se crea una tabla de contraseñas: la autenticación sigue siendo la de `auth.php` y Firebase.

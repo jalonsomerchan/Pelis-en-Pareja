@@ -18,7 +18,8 @@ Base: `{API_BASE}/pelisenpareja`. Router Flight existente. GET y POST según tab
 | POST | remove_member | group_id, uid | left |
 | GET | catalog | group_id, region opcional | providers, movie_genres, tv_genres, countries |
 | POST | settings | group_id, name, region, media_type, providers, excluded_genres, excluded_countries | group |
-| GET | discover | group_id, page (1–500), media_type opcional | titles, next_page, filter_version, reason |
+| GET | discover | group_id, page (1–500), media_type opcional; búsqueda Filter opcional: filter=1, provider_id, countries, genres, date_from, date_to, sort_by | titles, next_page, filter_version, reason |
+| GET | similar | group_id, media_type (movie/tv), tmdb_id, page opcional (1–500) | resultados de TMDB y relaciones guardadas |
 | GET | priorities | group_id, media_type opcional | titles prioritarios, filter_version |
 | GET | favorites | group_id, page (1–500), scope (mine/group) | items (30 por página), next_page |
 | GET | platforms | group_id, provider_id, mode (recent/popular), media_type opcional, page | titles, next_page, filter_version, reason |
@@ -38,6 +39,10 @@ Base: `{API_BASE}/pelisenpareja`. Router Flight existente. GET y POST según tab
 Los matches devueltos al votar son únicamente los que acaba de crear esa operación. La lista completa se obtiene en `matches`.
 
 `discover`/`priorities`/`platforms` aceptan `media_type=movie|tv|both`; si se omite, usan el tipo del grupo. El filtro de la petición no cambia el grupo. Prioridad: síes de miembros actuales, sin voto propio ni visto global, ordenados por cantidad de síes y recencia. Se revalida disponibilidad y exclusiones antes de registrar la oferta. La mezcla favorece dos títulos con síes por cada título general, sin duplicados. `group_likes` señala el número de síes en las propuestas prioritarias.
+
+`discover?filter=1` ejecuta una búsqueda personal de `movie`, `tv` o `reality`, sin prioridades ni cambios a los ajustes del grupo. Requiere `provider_id` de una plataforma elegida en el grupo. `countries` admite códigos separados por `|` de US, ES, GB, FR, KR y DE; `genres` admite IDs separados por `|`. Cada lista usa coincidencia con cualquiera de sus valores, y se siguen aplicando las exclusiones compartidas. `date_from` y `date_to` usan `YYYY-MM-DD`; se filtra la fecha original de estreno o emisión y `date_to` por defecto es hoy. `sort_by` admite `popularity.desc`, `revenue.desc` (solo películas), `vote_average.desc` o `vote_count.desc`. Los resultados omiten títulos ya vistos o votados por esa persona y registran una oferta para que se puedan votar desde Filter. No requiere migración.
+
+`similar` consulta el endpoint TMDB `/movie/{id}/similar` o `/tv/{id}/similar` y persiste cada relación en `pp_similar`, con su página y posición. Al refrescar la primera página se reemplazan las relaciones previas de ese título; al consultar páginas siguientes se actualiza solo esa página. Requiere ejecutar `20261005_pelisenpareja_similar.sql`.
 
 `favorites.items`: `{title, liked_at, seen, matched, votes:[{uid,display_name,decision}]}`. `scope=mine` (por defecto) incluye tus votos `like`; `scope=group` los títulos que gustan a algún miembro actual, sin duplicados, dentro del grupo autorizado. `decision` es `like`, `dislike`, `seen` o null (pendiente). La persona que marcó visto se identifica como `seen`; `seen=true` informa de la exclusión global. El historial no se pierde al marcar visto. Los votos pertenecen solo a miembros actuales. `title.my_decision` refleja tu voto y `can_vote=false` señala fichas consultadas sin voto propio previo: la lista compartida no crea ofertas ni permite saltarse filtros. Para votar esos títulos se utiliza Descubrir o Plataformas.
 

@@ -9,6 +9,7 @@ pelisenpareja.php
 PelisCatalog.php
 PelisTelegram.php
 migrations/20261004_pelisenpareja.sql
+migrations/20261005_pelisenpareja_similar.sql
 cron/pelisenpareja_migrate.php
 cron/pelisenpareja_notifications.php
 ```
@@ -69,7 +70,7 @@ La base href, start_url e iconos quedan relativos. Para una subcarpeta, también
 
 ## Comprobación real
 
-Para actualizar a las nuevas páginas, subir `pelisenpareja.php` y `PelisCatalog.php` juntos y publicar la nueva build. No hay migración adicional: se usan `pp_votes`, `pp_titles`, `pp_seen` y `pp_offers` existentes.
+Para actualizar a las nuevas páginas, subir `pelisenpareja.php` y `PelisCatalog.php` juntos y publicar la nueva build. Para habilitar `GET similar`, subir también la migración `20261005_pelisenpareja_similar.sql` y ejecutarla antes de usar ese endpoint.
 
 1. Crear dos cuentas y un grupo, elegir una plataforma y tipo de contenido.
 2. Unirse con código y aceptar una invitación desde el correo correcto verificado.

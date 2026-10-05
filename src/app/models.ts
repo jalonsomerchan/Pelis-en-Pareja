@@ -1,6 +1,6 @@
 export type MediaType = 'movie' | 'tv';
 export type MediaFilter = MediaType | 'both' | 'reality';
-export type View = 'discover' | 'favorites' | 'platforms' | 'matches' | 'statistics' | 'group' | 'settings';
+export type View = 'discover' | 'favorites' | 'platforms' | 'news' | 'filter' | 'matches' | 'statistics' | 'group' | 'settings';
 export type Decision = 'like' | 'dislike' | 'seen';
 export interface Provider {provider_id: number; provider_name: string; logo_path: string;}
 export interface Genre {id: number; name: string;}

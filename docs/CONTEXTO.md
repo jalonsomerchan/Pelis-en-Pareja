@@ -19,7 +19,7 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 - Modo demo explícito, sin escrituras ni comunicaciones externas; ilustraciones/posters y disponibilidad de ejemplo.
 - Backend en la carpeta API: `pelisenpareja.php`, `PelisTelegram.php`, migración SQL y dos scripts CLI.
 - Router: nueva entrada explícita `pelisenpareja`. Webhook existente: tokens `pp_` vinculados a la nueva app. `/stop` desconecta también Pelis en pareja.
-- 12 tablas InnoDB. Se aplicaron y probaron solo en MySQL temporal local; no producción.
+- 12 tablas base InnoDB aplicadas solo en MySQL temporal local; no producción. La tabla adicional `pp_similar` queda pendiente de la nueva migración, también por ejecutar manualmente.
 - Consenso serializado por grupo, idempotencia de match/avisos, recalcular tras entradas y salidas, vistos comunes a todos.
 - El propietario puede reiniciar las votaciones del grupo: borra votos y vistos, incrementa `filter_version`, desactiva matches activos y omite sus avisos Telegram pendientes; la acción pide confirmación.
 - Cola Telegram con claims, recuperación de workers, reintentos y descarte de avisos de un consenso ya inválido.
@@ -35,8 +35,11 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 - Favoritos paginados con selector Mis favoritos/Del grupo: tus síes o los de cualquier miembro y votos de miembros actuales, incluidos negativos y pendientes. Los vistos conservan historial y un aviso de visto global.
 - Pestañas Series | Películas | Todo | Realities en portada: filtro personal, sin escrituras en preferencias compartidas. Realities usa la categoría de series Reality de TMDB (género 10764); también está disponible en Plataformas. La elección del grupo se usa como valor inicial.
 - Página Plataformas: selector entre suscripciones elegidas, Recientes/Populares, series/películas/todo, paginación y ficha. Cada tarjeta permite votar Sí o No y cambiar el voto propio; los títulos ya vistos por el grupo se omiten. Filtros del grupo se respetan. En móviles, las tarjetas van en una sola columna, con cartel a la izquierda y ficha/acciones a la derecha.
+- Página Novedades: reúne películas y series recientes de todas las plataformas del grupo, filtra por tipo y permite votar. Ordena por estreno TMDB, guarda las páginas filtradas seis horas en `pp_cache` y precarga la siguiente en segundo plano. No afirma la fecha real de incorporación, que TMDB no proporciona.
+- Página Filter: asistente personal de seis pasos para tipo (película, serie o reality), una plataforma del grupo, países principales, categorías, periodo de estreno y orden. Consulta `discover` con filtros puntuales sin cambiar las preferencias compartidas; los títulos se muestran de uno en uno y se pueden votar con los controles de Descubrir. No requiere migración adicional.
 - Página Estadísticas por grupo: recuentos de títulos con sí, no, visto y match activo; desgloses por categorías, países y plataformas disponibles en la región. Solo cuentan votos de miembros actuales y un título se cuenta una vez por estado; los desgloses pueden solaparse. Incluye datos simulados en modo demo y actualización mientras está abierta.
-- Helper backend `PelisCatalog.php`; endpoints `priorities`, `favorites`, `platforms`, `statistics`. Se reutilizan las tablas existentes, sin migración adicional. Pruebas: 10 Node, 31 de catálogo y 18 de consenso MySQL local; TMDB simulado.
+- Helper backend `PelisCatalog.php`; endpoints `priorities`, `favorites`, `platforms`, `news`, `statistics` y filtros personales opcionales en `discover`. Se reutilizan las tablas existentes, sin migración adicional. Pruebas: Node y catálogo/consenso MySQL locales con TMDB simulado.
+- Endpoint autenticado `similar`: consulta `/movie/{id}/similar` o `/tv/{id}/similar` de TMDB y persiste las relaciones en `pp_similar`, conservando página y posición. La migración `20261005_pelisenpareja_similar.sql` está duplicada en `database/migrations` y `api/migrations`; queda para ejecución manual del usuario.
 
 ## Decisiones
 
@@ -53,12 +56,13 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 - Los vistos permanecen excluidos incluso si abandona el grupo quien los marcó.
 - Por petición del usuario, los votos individuales sí son visibles en la página de favoritos de otros miembros del mismo grupo. No se exponen emails ni datos de otros grupos.
 - Recientes usa fecha de estreno original del título; Populares usa popularidad TMDB. TMDB no aporta aquí fechas de incorporación por plataforma ni cifras reales de reproducciones.
+- Novedades ordena títulos disponibles por fecha de estreno de TMDB; la disponibilidad proviene de JustWatch a través de TMDB. Las fechas exactas de alta requieren una fuente que ofrezca historial de disponibilidad.
 - La identidad compartida de la API no se duplica: `pp_users` contiene un perfil y ajustes específicos, sin contraseñas.
 - Avisos internos consultados cada 15 segundos con app visible. Telegram se entrega mediante cron cada minuto. No se ha implementado Web Push con backend VAPID.
 
 ## Para ponerla en producción
 
-1. Usuario: ejecutar migración y verificar 12 tablas.
+1. Usuario: ejecutar las migraciones en orden y verificar 13 tablas.
 2. Confirmar la configuración privada de `PelisTmdb::$apiKey` en el servidor (el usuario ya rellenó el atributo local). `pelisenpareja::$appUrl` usa `https://pelisenpareja.alon.one`.
 3. Subir archivos PHP y cambios del router/webhook.
 4. Habilitar métodos Firebase y dominios autorizados.
