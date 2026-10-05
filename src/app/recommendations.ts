@@ -1,5 +1,11 @@
-import { Title } from './models';
+import { MediaFilter, Title } from './models';
 export const titleKey = (title: Pick<Title,'media_type'|'id'>) => `${title.media_type}:${title.id}`;
+
+// La primera carga debe ofrecer una muestra y representar ambos tipos en Todo.
+export function needsInitialCoverage(deck: Title[], media: MediaFilter): boolean {
+  if (deck.length < 6) return true;
+  return media === 'both' && (!deck.some(title=>title.media_type==='movie') || !deck.some(title=>title.media_type==='tv'));
+}
 
 // Mantener la tarjeta que se está leyendo; promover las siguientes sin repetir títulos.
 export function mergePriorities(deck: Title[], priorities: Title[]): Title[] {
