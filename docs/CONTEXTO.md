@@ -21,12 +21,13 @@ El usuario pidió inicialmente crear las tablas directamente. MySQL externo term
 - Router: nueva entrada explícita `pelisenpareja`. Webhook existente: tokens `pp_` vinculados a la nueva app. `/stop` desconecta también Pelis en pareja.
 - 12 tablas InnoDB. Se aplicaron y probaron solo en MySQL temporal local; no producción.
 - Consenso serializado por grupo, idempotencia de match/avisos, recalcular tras entradas y salidas, vistos comunes a todos.
+- El propietario puede reiniciar las votaciones del grupo: borra votos y vistos, incrementa `filter_version`, desactiva matches activos y omite sus avisos Telegram pendientes; la acción pide confirmación.
 - Cola Telegram con claims, recuperación de workers, reintentos y descarte de avisos de un consenso ya inválido.
 - Sin caché privada de API; cartelera visual cacheada por el service worker. Offline informa y bloquea votos reales.
 - Frontend preparado para GitHub Pages en `pelisenpareja.alon.one`: workflow de pruebas/build/despliegue en `main`, comando `build:pages`, CNAME y guía `GITHUB_PAGES.md`. La carpeta no tiene Git ni remoto; Pages/DNS/Firebase y publicación siguen pendientes.
 - Nuevas peticiones: los síes de miembros actuales tienen prioridad (dos propuestas preferidas por cada propuesta general), incluso si no están en la página popular de TMDB. El sondeo promueve propuestas nuevas conservando la tarjeta activa; nunca reintroduce votos propios ni vistos.
 - Favoritos paginados con selector Mis favoritos/Del grupo: tus síes o los de cualquier miembro y votos de miembros actuales, incluidos negativos y pendientes. Los vistos conservan historial y un aviso de visto global.
-- Pestañas Series | Películas | Todo en portada: filtro personal, sin escrituras en preferencias compartidas. La elección del grupo se usa como valor inicial.
+- Pestañas Series | Películas | Todo | Realities en portada: filtro personal, sin escrituras en preferencias compartidas. Realities usa la categoría de series Reality de TMDB (género 10764); también está disponible en Plataformas. La elección del grupo se usa como valor inicial.
 - Página Plataformas: selector entre suscripciones elegidas, Recientes/Populares, series/películas/todo, paginación, ficha y votar sí directamente. Filtros del grupo y vistos se respetan.
 - Helper backend nuevo `PelisCatalog.php`; endpoints `priorities`, `favorites`, `platforms`. Se reutilizan las tablas existentes, sin migración adicional. Pruebas: 10 Node, 26 catálogo y 18 consenso MySQL local; TMDB simulado.
 

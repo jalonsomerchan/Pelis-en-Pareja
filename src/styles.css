@@ -45,7 +45,7 @@
 @media(max-width:760px){
   .mobile-nav{padding-left:5px;padding-right:5px}.mobile-nav button{min-width:0;flex:1}.mobile-nav button>span:not(.mobile-count){font-size:8px}.mobile-count{right:7px}
   .media-tabs{margin-bottom:19px;width:100%}.media-tabs button{flex:1;padding:9px 12px;font-size:11px;min-height:42px}.compact-tabs{margin-bottom:0}
-  .movie-card{height:clamp(280px,calc(100svh - 547px),470px);min-height:280px}.group-interest{font-size:8px;margin-bottom:7px;padding:4px 6px}.group-interest svg{width:11px;height:11px}
+  .movie-card{height:clamp(280px,calc(100svh - 487px),470px);min-height:280px}.group-interest{font-size:8px;margin-bottom:7px;padding:4px 6px}.group-interest svg{width:11px;height:11px}
   .favorite-card{grid-template-columns:75px minmax(0,1fr);gap:15px;padding:17px;border-radius:17px}.favorite-heading h2{font-size:21px}.favorite-heading .eyebrow{font-size:8px}.favorite-status{font-size:9px;padding:6px 8px}.favorite-poster{border-radius:9px}
   .member-votes{margin-top:16px;gap:7px}.member-vote{min-width:0;width:100%;padding:8px}.member-vote .avatar{width:24px;height:24px}.member-vote strong{font-size:10px}.member-vote small{font-size:9px}.favorite-actions{gap:8px;font-size:10px;margin-top:12px}
   .platform-picker{gap:9px;margin-bottom:18px}.platform-picker button{padding:8px 11px;min-height:48px;font-size:10px}.platform-picker img{width:26px;height:26px}.platform-filter-bar{gap:12px}.feed-modes{gap:24px;min-height:40px}.feed-modes button{font-size:12px}.catalog-explanation{font-size:10px;margin-bottom:19px}
@@ -77,3 +77,10 @@
   .mobile-menu-panel button.active .count{background:#2531191a;color:inherit}
   .mobile-menu-scrim{display:block;position:fixed;inset:66px 0 0;z-index:29;background:#0005;cursor:default}
 }
+.reset-votes-panel{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-top:24px;border-color:#654132}
+.reset-votes-panel .eyebrow{color:#d89a87}
+.reset-votes-panel h2{margin-top:10px;font-size:21px}
+.reset-votes-panel p{max-width:690px;margin-top:10px;color:var(--muted);font-size:12px}
+.danger-button{flex:none;background:#30201b;border-color:#704536;color:#ffc2b4}
+.danger-button:hover:not(:disabled){background:#432821}
+@media(max-width:760px){.reset-votes-panel{align-items:stretch;flex-direction:column;gap:18px}.reset-votes-panel .button{width:100%}}

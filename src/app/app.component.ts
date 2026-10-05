@@ -26,7 +26,7 @@ export class AppComponent implements OnDestroy {
   readonly deck = signal<Title[]>([]);
   readonly current = computed(() => this.deck()[0] ?? null);
   readonly discoverMedia = signal<MediaFilter>('both');
-  readonly mediaTabs: {id:MediaFilter;label:string}[] = [{id:'tv',label:'Series'},{id:'movie',label:'Películas'},{id:'both',label:'Todo'}];
+  readonly mediaTabs: {id:MediaFilter;label:string}[] = [{id:'tv',label:'Series'},{id:'movie',label:'Películas'},{id:'both',label:'Todo'},{id:'reality',label:'Realities'}];
   readonly favorites = signal<Favorite[]>([]);
   readonly favoritesScope = signal<'mine'|'group'>('mine');
   readonly favoritesPage = signal(1);
@@ -144,6 +144,20 @@ export class AppComponent implements OnDestroy {
   confirm(message:string,action:()=>Promise<void>){this.confirmation.set({message,action});}
   async confirmAction(){const c=this.confirmation();if(!c)return;this.confirmation.set(null);await this.operation(c.action);}
   requestRotate(){this.confirm('¿Generar un código nuevo? El código actual dejará de funcionar.',async()=>{if(this.demo())return;const r=await this.api.post<{group:Group}>('rotate_code',{group_id:this.groupId()});this.updateGroup(r.group);this.notify('Código renovado.');});}
+  requestResetVotes(){
+    const id=this.groupId();if(id===null||!this.owner()||this.demo())return;
+    this.confirm('Se eliminarán todos los síes y noes de los miembros, junto con las marcas de visto del grupo. Los matches activos se desactivarán y los avisos anteriores se conservarán; se cancelarán los envíos pendientes. Esta acción no se puede deshacer.',async()=>{
+      const r=await this.api.post<{group:Group;deleted_votes:number;deleted_seen:number;deactivated_matches:number}>('reset_votes',{group_id:id});
+      if(id!==this.groupId())return;
+      this.updateGroup(r.group);
+      const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);
+      this.epoch++;this.prioritySignature='';this.deck.set([]);this.nextPage=1;
+      this.matches.set([]);this.favorites.set([]);this.favoriteEpoch++;this.favoritesPage.set(1);this.favoritesNext.set(null);this.favoritesBusy.set(false);
+      this.platformEpoch++;this.platformTitles.set([]);this.platformNext.set(null);this.platformBusy.set(false);
+      void this.loadNotifications().catch(e=>this.setError(e));
+      this.notify(`Votaciones reiniciadas: ${r.deleted_votes} votos y ${r.deleted_seen} marcas de visto eliminados; ${r.deactivated_matches} matches desactivados.`);
+    });
+  }
   requestRemove(uid:string){const self=uid===this.user()?.uid;this.confirm(self?'¿Salir del grupo? Si lo creaste, otro miembro se convertirá en propietario. Si eres la última persona, el grupo se eliminará.':'¿Quitar a esta persona del grupo? Se recalcularán los matches entre los miembros restantes.',async()=>{if(this.demo()){this.notify('Acción disponible con una cuenta real.');return;}await this.api.post('remove_member',{group_id:this.groupId(),uid});this.groupId.set(null);this.deck.set([]);this.matches.set([]);await this.bootstrap();});}
   async loadCatalog(){
     if(!this.group())return;const region=this.view()==='settings'?this.draft.region:this.group()!.region;
@@ -182,7 +196,10 @@ export class AppComponent implements OnDestroy {
   openDetail(title:Title){this.detailTitle.set(title);this.showDetail.set(true);}
   voteLabel(decision:Decision | null){return decision==='like'?'Quiere verla':decision==='dislike'?'No le apetece':decision==='seen'?'Ya la vio':'Sin votar';}
   likesCount(favorite:Favorite){return favorite.votes.filter(v=>v.decision==='like').length;}
-  private demoAvailable(media:MediaFilter){const g=this.group()!;return structuredClone(DEMO_TITLES).filter(t=>(media==='both'||t.media_type===media)&&this.demoVotes.get(titleKey(t))!=='seen'&&!t.genres.some(x=>g.excluded_genres.includes(x.id))&&!t.countries.some(c=>g.excluded_countries.includes(c))&&t.providers.some(p=>g.providers.includes(p.provider_id)));}
+  isReality(title:Pick<Title,'media_type'|'genres'>){return title.media_type==='tv'&&title.genres.some(g=>g.id===10764);}
+  mediaLabel(title:Title){return title.media_type==='movie'?'PELÍCULA':this.isReality(title)?'REALITY':'SERIE';}
+  groupProviders(title:Title){const selected=this.group()?.providers??[];return title.providers.filter(p=>selected.includes(p.provider_id));}
+  private demoAvailable(media:MediaFilter){const g=this.group()!;return structuredClone(DEMO_TITLES).filter(t=>(media==='both'||(media==='reality'?this.isReality(t):t.media_type===media))&&this.demoVotes.get(titleKey(t))!=='seen'&&!t.genres.some(x=>g.excluded_genres.includes(x.id))&&!t.countries.some(c=>g.excluded_countries.includes(c))&&t.providers.some(p=>g.providers.includes(p.provider_id)));}
   async changeFavoritesScope(scope:'mine'|'group'){this.favoritesScope.set(scope);this.favorites.set([]);await this.loadFavorites(1);}
   async loadFavorites(page=this.favoritesPage()){
     if(!this.group())return;const id=this.groupId()!;const epoch=++this.favoriteEpoch;this.favoritesPage.set(page);this.favoritesBusy.set(true);
@@ -266,8 +283,8 @@ export class AppComponent implements OnDestroy {
   async notificationClick(n:AppNotification){this.showNotifications.set(false);const id=Number(n.group_id);if(this.groupId()!==id)await this.switchGroup(String(id));await this.navigate('matches');if(!n.read_at&&!this.demo()){try{await this.api.post('read_notifications',{ids:[Number(n.id)]});this.notifications.update(all=>all.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x));}catch(e){this.setError(e);}}}
   private polling=false;
   private async poll(){if(this.polling||this.busy()||!this.user()||this.demo()||!this.online()||document.visibilityState!=='visible')return;this.polling=true;try{
-    await this.loadNotifications();const id=this.groupId();if(id){const visible=this.view()==='platforms'?[...this.platformTitles(),...this.deck()]:[...this.deck(),...this.platformTitles()];const keys=[...new Set(visible.map(titleKey))].slice(0,60).join(',');const r=await this.api.get<{group:Group;hidden:string[];seen:string[];priority_keys:string[]}>('state',{group_id:id,titles:keys,media_type:this.discoverMedia()});if(id!==this.groupId())return;const version=this.group()?.filter_version;this.groups.update(all=>all.map(g=>g.id===id?r.group:g));this.deck.update(all=>all.filter(t=>!r.hidden.includes(`${t.media_type}:${t.id}`)));this.platformTitles.update(all=>all.filter(t=>!(r.seen ?? []).includes(titleKey(t))));
-      if(version!==r.group.filter_version){if(this.view()==='discover')await this.reloadDeck();if(this.view()==='platforms'){this.catalog.set(null);await this.loadPlatformFeed();}}
+    await this.loadNotifications();const id=this.groupId();if(id){const visible=this.view()==='platforms'?[...this.platformTitles(),...this.deck()]:[...this.deck(),...this.platformTitles()];const keys=[...new Set(visible.map(titleKey))].slice(0,60).join(',');const r=await this.api.get<{group:Group;hidden:string[];seen:string[];priority_keys:string[]}>('state',{group_id:id,titles:keys,media_type:this.discoverMedia()});if(id!==this.groupId()||this.busy())return;const version=this.group()?.filter_version;this.groups.update(all=>all.map(g=>g.id===id?r.group:g));this.deck.update(all=>all.filter(t=>!r.hidden.includes(`${t.media_type}:${t.id}`)));this.platformTitles.update(all=>all.filter(t=>!(r.seen ?? []).includes(titleKey(t))));
+      if(version!==r.group.filter_version){const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);if(this.view()==='discover')await this.reloadDeck();if(this.view()==='platforms'){this.catalog.set(null);await this.loadPlatformFeed();}}
       if(this.view()==='discover')await this.refreshPriorities(r.priority_keys ?? []);
       if(this.view()==='matches')await this.loadMatches();if(this.view()==='favorites')await this.loadFavorites();}
     if(this.telegramLink){const b=await this.api.get<Bootstrap>('bootstrap');this.telegram.set(b.telegram);if(b.telegram.linked)this.telegramLink='';}

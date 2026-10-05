@@ -1,5 +1,5 @@
 export type MediaType = 'movie' | 'tv';
-export type MediaFilter = MediaType | 'both';
+export type MediaFilter = MediaType | 'both' | 'reality';
 export type View = 'discover' | 'favorites' | 'platforms' | 'matches' | 'group' | 'settings';
 export type Decision = 'like' | 'dislike' | 'seen';
 export interface Provider {provider_id: number; provider_name: string; logo_path: string;}
