@@ -11,6 +11,7 @@ import { SwUpdate } from '@angular/service-worker';
 type FilterMedia = 'movie'|'tv'|'reality';
 type FilterDateRange = 'all'|'month'|'year'|'2020s'|'2010s'|'2000s'|'1990s'|'1980s'|'1970s'|'1960s'|'before1960';
 type FilterSort = 'popularity.desc'|'revenue.desc'|'vote_average.desc'|'vote_count.desc';
+type DiscoveryCheckpoint = {filter_version:number;catalog_date:string;next_page:number|null;titles:Title[]};
 
 @Component({selector:'app-root',standalone:true,imports:[FormsModule,ModalFocusDirective],templateUrl:'./app.component.html'})
 export class AppComponent implements OnDestroy {
@@ -31,6 +32,12 @@ export class AppComponent implements OnDestroy {
   readonly deck = signal<Title[]>([]);
   readonly current = computed(() => this.deck()[0] ?? null);
   readonly discoverMedia = signal<MediaFilter>('both');
+  readonly similarMedia = signal<MediaFilter>('both');
+  readonly similarTitles = signal<Title[]>([]);
+  readonly similarPage = signal(1);
+  readonly similarNext = signal<number | null>(null);
+  readonly similarBusy = signal(false);
+  readonly similarReason = signal<string | null>(null);
   readonly mediaTabs: {id:MediaFilter;label:string}[] = [{id:'tv',label:'Series'},{id:'movie',label:'Películas'},{id:'both',label:'Todo'},{id:'reality',label:'Realities'}];
   readonly favorites = signal<Favorite[]>([]);
   readonly favoritesScope = signal<'mine'|'group'>('mine');
@@ -92,7 +99,7 @@ export class AppComponent implements OnDestroy {
   readonly emailVerified = signal(false);
   readonly mobileMenuOpen = signal(false);
   readonly duration = duration;
-  readonly tabs: {id:View;label:string;icon:string}[] = [{id:'discover',label:'Descubrir',icon:'spark'},{id:'favorites',label:'Favoritos',icon:'bookmark'},{id:'platforms',label:'Plataformas',icon:'film'},{id:'news',label:'Novedades',icon:'spark'},{id:'filter',label:'Filter',icon:'sliders'},{id:'matches',label:'Matches',icon:'heart'},{id:'statistics',label:'Estadísticas',icon:'chart'},{id:'group',label:'Mi grupo',icon:'people'},{id:'settings',label:'Ajustes',icon:'sliders'}];
+  readonly tabs: {id:View;label:string;icon:string}[] = [{id:'discover',label:'Descubrir',icon:'spark'},{id:'similar',label:'Similares',icon:'spark'},{id:'favorites',label:'Favoritos',icon:'bookmark'},{id:'platforms',label:'Plataformas',icon:'film'},{id:'news',label:'Novedades',icon:'spark'},{id:'filter',label:'Filter',icon:'sliders'},{id:'matches',label:'Matches',icon:'heart'},{id:'statistics',label:'Estadísticas',icon:'chart'},{id:'group',label:'Mi grupo',icon:'people'},{id:'settings',label:'Ajustes',icon:'sliders'}];
   readonly statisticsDimensions: {id:'genres'|'countries'|'platforms';label:string}[] = [{id:'genres',label:'Categorías'},{id:'countries',label:'Países'},{id:'platforms',label:'Plataformas'}];
   authMode: 'login'|'register'|'reset' = 'login';
   email = ''; password = ''; displayName = '';
@@ -100,6 +107,7 @@ export class AppComponent implements OnDestroy {
   inviteLink = ''; telegramLink = '';
   draft = {name:'',region:'ES',media_type:'both' as Group['media_type'],providers:[] as number[],excluded_genres:[] as number[],excluded_countries:[] as string[]};
   private nextPage: number | null = 1;
+  private activeDiscoveryKey = '';
   private epoch = 0;
   private dragging: {id:number;x:number;y:number} | null = null;
   private interval = window.setInterval(() => void this.poll(),15000);
@@ -111,6 +119,7 @@ export class AppComponent implements OnDestroy {
   private favoriteEpoch = 0;
   private platformEpoch = 0;
   private newsEpoch = 0;
+  private similarEpoch = 0;
   private filterEpoch = 0;
   private statisticsEpoch = 0;
   private prioritySignature = '';
@@ -157,24 +166,30 @@ export class AppComponent implements OnDestroy {
     const data=await this.api.get<Bootstrap>('bootstrap');if(this.disposed)return;
     this.notificationPermission = 'Notification' in window && Notification.permission === 'granted';this.user.set(data.user);this.groups.set(data.groups);this.invitations.set(data.invitations);this.telegram.set(data.telegram);this.tmdbConfigured.set(data.tmdb_configured);this.emailVerified.set(!!this.api.firebaseAuth.currentUser?.emailVerified);
     const saved=Number(localStorage.getItem('pelis.activeGroup'));const currentId=this.groupId();const chosen=data.groups.find(g=>g.id===currentId) ?? data.groups.find(g=>g.id===saved) ?? data.groups[0];
-    if(chosen){this.groupId.set(chosen.id);this.discoverMedia.set(chosen.media_type);this.setDraft(chosen);await this.refreshView();}else this.showGroupForm.set(true);
+    if(chosen){this.groupId.set(chosen.id);this.discoverMedia.set(this.savedDiscoverMedia(chosen));this.similarMedia.set(chosen.media_type);this.setDraft(chosen);await this.refreshView();}else this.showGroupForm.set(true);
     const token=new URL(location.href).searchParams.get('invitation');
     if(token && this.emailVerified()){await this.acceptInvitation(undefined,token);const url=new URL(location.href);url.searchParams.delete('invitation');history.replaceState(null,'',url);}
     await this.loadNotifications();
   }
-  enterDemo(){this.demoVotes.clear();this.demoLikes.clear();this.favorites.set([]);this.favoritesPage.set(1);this.platformProvider.set(null);this.filterProviderId.set(null);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterStep.set(0);this.discoverMedia.set('both');this.demo.set(true);this.error.set('');this.initializing.set(false);this.user.set({uid:'demo',display_name:'Tú',email:'demo@ejemplo.es',photo_url:''});this.groups.set([structuredClone(DEMO_GROUP)]);this.groupId.set(1);this.catalog.set(structuredClone(DEMO_CATALOG));this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.tmdbConfigured.set(true);this.telegram.set({configured:false,linked:false,enabled:true,username:null});this.view.set('discover');this.setDraft(this.group()!);void this.reloadDeck();this.notify('Modo demo: los votos y matches son una simulación.');}
-  private clearSession(){this.localVoteKeys.clear();this.epoch++;this.favoriteEpoch++;this.platformEpoch++;this.newsEpoch++;this.filterEpoch++;this.filterBusy.set(false);this.statisticsEpoch++;this.statistics.set(null);this.statisticsBusy.set(false);this.favorites.set([]);this.platformTitles.set([]);this.newsTitles.set([]);this.newsNext.set(1);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterEncounteredResults.set(false);this.detailTitle.set(null);this.user.set(null);this.groups.set([]);this.groupId.set(null);this.deck.set([]);this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.catalog.set(null);this.showGroupForm.set(false);this.closeOverlays();this.primedNotifications=false;this.notificationIds.clear();}
+  enterDemo(){this.demoVotes.clear();this.demoLikes.clear();this.favorites.set([]);this.favoritesPage.set(1);this.platformProvider.set(null);this.filterProviderId.set(null);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterStep.set(0);this.discoverMedia.set('both');this.similarMedia.set('both');this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.demo.set(true);this.error.set('');this.initializing.set(false);this.user.set({uid:'demo',display_name:'Tú',email:'demo@ejemplo.es',photo_url:''});this.groups.set([structuredClone(DEMO_GROUP)]);this.groupId.set(1);this.catalog.set(structuredClone(DEMO_CATALOG));this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.tmdbConfigured.set(true);this.telegram.set({configured:false,linked:false,enabled:true,username:null});this.view.set('discover');this.setDraft(this.group()!);void this.reloadDeck();this.notify('Modo demo: los votos y matches son una simulación.');}
+  private clearSession(){this.localVoteKeys.clear();this.epoch++;this.activeDiscoveryKey='';this.nextPage=1;this.favoriteEpoch++;this.platformEpoch++;this.newsEpoch++;this.similarEpoch++;this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.filterEpoch++;this.filterBusy.set(false);this.statisticsEpoch++;this.statistics.set(null);this.statisticsBusy.set(false);this.favorites.set([]);this.platformTitles.set([]);this.newsTitles.set([]);this.newsNext.set(1);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterEncounteredResults.set(false);this.detailTitle.set(null);this.user.set(null);this.groups.set([]);this.groupId.set(null);this.deck.set([]);this.matches.set([]);this.notifications.set([]);this.invitations.set([]);this.catalog.set(null);this.showGroupForm.set(false);this.closeOverlays();this.primedNotifications=false;this.notificationIds.clear();}
   async logout(){await this.operation(async()=>{if(!this.demo())await this.api.logout();this.demo.set(false);this.clearSession();this.view.set('discover');});}
-  async switchGroup(value:string){if(this.busy())return;const id=Number(value);if(!this.groups().some(g=>g.id===id))return;this.localVoteKeys.clear();this.epoch++;this.favoriteEpoch++;this.platformEpoch++;this.newsEpoch++;this.filterEpoch++;this.filterBusy.set(false);this.statisticsEpoch++;this.statistics.set(null);this.favorites.set([]);this.favoritesPage.set(1);this.platformTitles.set([]);this.newsTitles.set([]);this.newsNext.set(1);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterEncounteredResults.set(false);this.platformProvider.set(null);this.filterProviderId.set(null);this.groupId.set(id);this.discoverMedia.set(this.group()!.media_type);if(!this.demo())localStorage.setItem('pelis.activeGroup',String(id));this.catalog.set(null);this.setDraft(this.group()!);this.showDetail.set(false);this.showMatch.set(null);this.error.set('');await this.refreshView();}
+  async switchGroup(value:string){if(this.busy())return;const id=Number(value);if(!this.groups().some(g=>g.id===id))return;this.localVoteKeys.clear();this.epoch++;this.favoriteEpoch++;this.platformEpoch++;this.newsEpoch++;this.similarEpoch++;this.similarTitles.set([]);this.similarPage.set(1);this.similarNext.set(null);this.similarReason.set(null);this.filterEpoch++;this.filterBusy.set(false);this.statisticsEpoch++;this.statistics.set(null);this.favorites.set([]);this.favoritesPage.set(1);this.platformTitles.set([]);this.newsTitles.set([]);this.newsNext.set(1);this.filterTitles.set([]);this.filterNext.set(1);this.filterHasSearched.set(false);this.filterEncounteredResults.set(false);this.platformProvider.set(null);this.filterProviderId.set(null);this.groupId.set(id);this.discoverMedia.set(this.savedDiscoverMedia(this.group()!));this.similarMedia.set(this.group()!.media_type);if(!this.demo())localStorage.setItem('pelis.activeGroup',String(id));this.catalog.set(null);this.setDraft(this.group()!);this.showDetail.set(false);this.showMatch.set(null);this.error.set('');await this.refreshView();}
   toggleMobileMenu(){this.mobileMenuOpen.update(open=>!open);}
   closeMobileMenu(){this.mobileMenuOpen.set(false);}
   async navigate(view:View){this.closeMobileMenu();if(view!==this.view())this.favoritesPage.set(1);this.view.set(view);this.error.set('');this.showNotifications.set(false);window.scrollTo(0,0);await this.refreshView();}
-  private async refreshView(){if(this.view()==='discover')await this.reloadDeck();if(this.view()==='matches')await this.loadMatches();if(this.view()==='favorites')await this.loadFavorites();if(this.view()==='platforms')await this.loadPlatformFeed();if(this.view()==='news')await this.loadNews();if(this.view()==='filter'){await this.loadCatalog();this.ensureFilterProvider();}if(this.view()==='statistics')await this.loadStatistics();if(this.view()==='settings')await this.loadCatalog();}
+  private async refreshView(){if(this.view()==='discover')await this.resumeDeck();if(this.view()==='similar')await this.loadSimilarFeed(1);if(this.view()==='matches')await this.loadMatches();if(this.view()==='favorites')await this.loadFavorites();if(this.view()==='platforms')await this.loadPlatformFeed();if(this.view()==='news')await this.loadNews();if(this.view()==='filter'){await this.loadCatalog();this.ensureFilterProvider();}if(this.view()==='statistics')await this.loadStatistics();if(this.view()==='settings')await this.loadCatalog();}
   setDraft(g:Group){this.draft={name:g.name,region:g.region,media_type:g.media_type,providers:[...g.providers],excluded_genres:[...g.excluded_genres],excluded_countries:[...g.excluded_countries]};}
   private updateGroup(group:Group){this.groups.update(all=>all.some(g=>g.id===group.id)?all.map(g=>g.id===group.id?group:g):[...all,group]);this.setDraft(group);}
+  private savedDiscoverMedia(group:Group):MediaFilter{
+    if(this.demo())return group.media_type;
+    try{const media=localStorage.getItem(`pelis.discover.media:${this.user()?.uid ?? 'anonymous'}:${group.id}`);if(media==='movie'||media==='tv'||media==='both'||media==='reality')return media;}catch{/* Use the group's default if browser storage is unavailable. */}
+    return group.media_type;
+  }
+  private saveDiscoverMedia(groupId:number,media:MediaFilter){if(this.demo())return;try{localStorage.setItem(`pelis.discover.media:${this.user()?.uid ?? 'anonymous'}:${groupId}`,media);}catch{/* Media selection remains available for this session. */}}
   async createGroup(){await this.operation(async()=>{if(this.demo()){this.notify('Crea una cuenta para guardar un grupo real.');return;}const result=await this.api.post<{group:Group}>('create_group',{name:this.groupName.trim()});this.updateGroup(result.group);this.groupId.set(result.group.id);localStorage.setItem('pelis.activeGroup',String(result.group.id));this.showGroupForm.set(false);this.groupName='';this.view.set('settings');this.catalog.set(null);await this.loadCatalog();this.notify('Grupo creado. Elige vuestras plataformas e invita a tu pareja.');});}
-  async joinGroup(){await this.operation(async()=>{if(this.demo()){this.notify('Crea una cuenta para unirte a un grupo real.');return;}const r=await this.api.post<{group:Group}>('join_group',{code:this.joinCode.trim()});this.updateGroup(r.group);this.groupId.set(r.group.id);this.showGroupForm.set(false);this.joinCode='';this.catalog.set(null);this.discoverMedia.set(this.draft.media_type);this.view.set('discover');await this.reloadDeck();this.notify('Ya estás en el grupo.');});}
-  async acceptInvitation(id?:number,token?:string){if(this.demo())return;try{const r=await this.api.post<{group:Group}>('accept_invite',token ? {token} : {invitation_id:id});this.updateGroup(r.group);this.groupId.set(r.group.id);this.invitations.update(all=>all.filter(i=>i.id!==id && i.group_id!==r.group.id));this.showGroupForm.set(false);this.catalog.set(null);await this.refreshView();this.notify('Invitación aceptada. ¡A elegir juntos!');}catch(e){this.setError(e);}}
+  async joinGroup(){await this.operation(async()=>{if(this.demo()){this.notify('Crea una cuenta para unirte a un grupo real.');return;}const r=await this.api.post<{group:Group}>('join_group',{code:this.joinCode.trim()});this.updateGroup(r.group);this.groupId.set(r.group.id);this.showGroupForm.set(false);this.joinCode='';this.catalog.set(null);this.discoverMedia.set(this.savedDiscoverMedia(r.group));this.view.set('discover');await this.resumeDeck();this.notify('Ya estás en el grupo.');});}
+  async acceptInvitation(id?:number,token?:string){if(this.demo())return;try{const r=await this.api.post<{group:Group}>('accept_invite',token ? {token} : {invitation_id:id});this.updateGroup(r.group);this.groupId.set(r.group.id);this.discoverMedia.set(this.savedDiscoverMedia(r.group));this.invitations.update(all=>all.filter(i=>i.id!==id && i.group_id!==r.group.id));this.showGroupForm.set(false);this.catalog.set(null);await this.refreshView();this.notify('Invitación aceptada. ¡A elegir juntos!');}catch(e){this.setError(e);}}
   async invite(){await this.operation(async()=>{if(this.demo()){this.notify('Las invitaciones se enviarán cuando uses una cuenta real.');return;}const r=await this.api.post<{group:Group;email_sent:boolean;invite_url:string;message:string}>('invite_email',{group_id:this.groupId(),email:this.inviteEmail.trim()});this.updateGroup(r.group);this.inviteLink=r.invite_url;this.inviteEmail='';this.notify(r.message);});}
   async cancelInvite(id:number){await this.operation(async()=>{const r=await this.api.post<{group:Group}>('cancel_invite',{group_id:this.groupId(),invitation_id:id});this.updateGroup(r.group);this.notify('Invitación cancelada.');});}
   async copy(text:string){try{await navigator.clipboard.writeText(text);this.notify('Copiado al portapapeles.');}catch{this.notify('No se pudo copiar. Selecciona y copia el texto.');}}
@@ -189,7 +204,7 @@ export class AppComponent implements OnDestroy {
       if(id!==this.groupId())return;
       this.updateGroup(r.group);
       const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);
-      this.epoch++;this.prioritySignature='';this.deck.set([]);this.nextPage=1;
+      this.epoch++;this.prioritySignature='';this.deck.set([]);this.nextPage=1;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());this.clearDiscoveryCheckpoint(id,this.discoverMedia());
       this.matches.set([]);this.favorites.set([]);this.favoriteEpoch++;this.favoritesPage.set(1);this.favoritesNext.set(null);this.favoritesBusy.set(false);
       this.platformEpoch++;this.platformTitles.set([]);this.platformNext.set(null);this.platformBusy.set(false);
       void this.loadNotifications().catch(e=>this.setError(e));
@@ -271,19 +286,35 @@ export class AppComponent implements OnDestroy {
   async saveSettings(){await this.operation(async()=>{if(!this.draft.providers.length)throw new Error('Selecciona al menos una plataforma.');const g=this.group();if(!g)return;
     if(this.demo()){this.updateGroup({...g,...structuredClone(this.draft),filter_version:g.filter_version+1});this.notify('Preferencias de la demo actualizadas.');}
     else{const r=await this.api.post<{group:Group}>('settings',{group_id:g.id,...this.draft});this.updateGroup(r.group);this.notify('Preferencias guardadas para todo el grupo.');}
-    this.discoverMedia.set(this.draft.media_type);this.view.set('discover');await this.reloadDeck();
+    this.discoverMedia.set(this.draft.media_type);this.saveDiscoverMedia(this.groupId()!,this.draft.media_type);this.similarMedia.set(this.draft.media_type);this.view.set('discover');await this.reloadDeck();
   });}
-  async reloadDeck(){this.epoch++;this.prioritySignature='';this.deck.set([]);this.nextPage=1;await this.loadMore();}
-  async changeDiscoverMedia(media:MediaFilter){if(this.busy()||this.discoverMedia()===media)return;this.discoverMedia.set(media);this.showDetail.set(false);await this.reloadDeck();}
-  mediaTabKeydown(event:KeyboardEvent,context:'discover'|'platforms'|'news'){
-    if(this.busy()||(context==='platforms'&&this.platformBusy())||(context==='news'&&this.newsBusy()))return;
-    const current=context==='discover'?this.discoverMedia():context==='platforms'?this.platformMedia():this.newsMedia();let index=this.mediaTabs.findIndex(t=>t.id===current);
+  async reloadDeck(){this.epoch++;this.prioritySignature='';this.clearDiscoveryCheckpoint();this.deck.set([]);this.nextPage=1;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(this.groupId()??-1,this.discoverMedia());await this.loadMore();}
+  async changeDiscoverMedia(media:MediaFilter){if(this.busy()||this.discoverMedia()===media)return;this.saveDiscoveryCheckpoint();this.discoverMedia.set(media);if(this.groupId()!==null)this.saveDiscoverMedia(this.groupId()!,media);this.showDetail.set(false);await this.resumeDeck();}
+  async changeSimilarMedia(media:MediaFilter){if(this.similarBusy()||this.similarMedia()===media)return;this.similarMedia.set(media);await this.loadSimilarFeed(1);}
+  async loadSimilarFeed(page=1){
+    if(!this.group())return;const id=this.groupId()!,epoch=++this.similarEpoch;this.similarPage.set(page);this.similarBusy.set(true);this.similarTitles.set([]);this.similarNext.set(null);this.similarReason.set(null);
+    try{
+      if(this.demo()){
+        const roots=DEMO_TITLES.filter(title=>['like','seen'].includes(this.demoVotes.get(titleKey(title)) ?? ''));
+        if(!roots.length){this.similarReason.set('no_sources');return;}
+        const rootKeys=new Set(roots.map(titleKey));
+        const titles=this.demoAvailable(this.similarMedia()).filter(title=>!rootKeys.has(titleKey(title))&&!this.demoVotes.has(titleKey(title))).map(title=>({title,score:Math.max(0,...roots.map(root=>root.genres.filter(genre=>title.genres.some(candidate=>candidate.id===genre.id)).length))})).filter(item=>item.score>0).sort((a,b)=>b.score-a.score).map(item=>({...item.title,my_decision:null}));
+        this.similarTitles.set(titles);this.similarReason.set(titles.length?null:'exhausted');return;
+      }
+      const result=await this.api.get<Deck>('similar_feed',{group_id:id,page,media_type:this.similarMedia()});
+      if(epoch!==this.similarEpoch||id!==this.groupId())return;
+      this.similarTitles.set(result.titles.filter(title=>!this.localVoteKeys.has(id+':'+titleKey(title))));this.similarNext.set(result.next_page);this.similarReason.set(result.reason);
+    }catch(error){if(epoch===this.similarEpoch)this.setError(error);}finally{if(epoch===this.similarEpoch)this.similarBusy.set(false);}
+  }
+  mediaTabKeydown(event:KeyboardEvent,context:'discover'|'similar'|'platforms'|'news'){
+    if(this.busy()||(context==='platforms'&&this.platformBusy())||(context==='news'&&this.newsBusy())||(context==='similar'&&this.similarBusy()))return;
+    const current=context==='discover'?this.discoverMedia():context==='similar'?this.similarMedia():context==='platforms'?this.platformMedia():this.newsMedia();let index=this.mediaTabs.findIndex(t=>t.id===current);
     if(event.key==='ArrowRight')index=(index+1)%this.mediaTabs.length;
     else if(event.key==='ArrowLeft')index=(index+this.mediaTabs.length-1)%this.mediaTabs.length;
     else if(event.key==='Home')index=0;else if(event.key==='End')index=this.mediaTabs.length-1;else return;
     event.preventDefault();const media=this.mediaTabs[index]!.id;
-    if(context==='discover')void this.changeDiscoverMedia(media);else if(context==='platforms')void this.changePlatformMedia(media);else void this.changeNewsMedia(media);
-    document.getElementById((context==='discover'?'discover':context==='platforms'?'platform':'news')+'-tab-'+media)?.focus();
+    if(context==='discover')void this.changeDiscoverMedia(media);else if(context==='similar')void this.changeSimilarMedia(media);else if(context==='platforms')void this.changePlatformMedia(media);else void this.changeNewsMedia(media);
+    document.getElementById((context==='discover'?'discover':context==='similar'?'similar':context==='platforms'?'platform':'news')+'-tab-'+media)?.focus();
   }
   openDetail(title:Title){this.detailTitle.set(title);this.showDetail.set(true);}
   voteLabel(decision:Decision | null){return decision==='like'?'Quiere verla':decision==='dislike'?'No le apetece':decision==='seen'?'Ya la vio':'Sin votar';}
@@ -361,9 +392,43 @@ export class AppComponent implements OnDestroy {
     const r=await this.api.get<{titles:Title[];filter_version:number}>('priorities',{group_id:id,media_type:this.discoverMedia()});
     if(epoch!==this.epoch||id!==this.groupId()||this.busy())return;
     if(r.filter_version!==this.group()?.filter_version){await this.reloadDeck();return;}
-    this.deck.update(all=>mergePriorities(all,r.titles.filter(t=>!this.localVoteKeys.has(id+':'+titleKey(t)))));this.preloadNextPosters();this.prioritySignature=signature;
+    this.deck.update(all=>mergePriorities(all,r.titles.filter(t=>!this.localVoteKeys.has(id+':'+titleKey(t)))));this.preloadNextPosters();this.saveDiscoveryCheckpoint();this.prioritySignature=signature;
   }
   private discoveryPageKey(groupId:number,media:MediaFilter,page:number){return `${groupId}:${media}:${page}`;}
+  private discoveryCatalogDate(){return new Date().toISOString().slice(0,10);}
+  private discoveryCheckpointKey(groupId:number,media:MediaFilter){return `pelis.discover.v1:${this.user()?.uid ?? 'anonymous'}:${groupId}:${media}`;}
+  private activeDiscoveryCheckpointKey(groupId:number,media:MediaFilter){return `${this.discoveryCheckpointKey(groupId,media)}:${this.discoveryCatalogDate()}`;}
+  private readDiscoveryCheckpoint(groupId:number,media:MediaFilter):DiscoveryCheckpoint|null{
+    const key=this.discoveryCheckpointKey(groupId,media);
+    try{
+      const raw=localStorage.getItem(key);if(!raw)return null;
+      const value=JSON.parse(raw) as Partial<DiscoveryCheckpoint>;
+      const nextPage=value.next_page===null?null:Number(value.next_page);
+      if(!Number.isInteger(value.filter_version)||value.filter_version!==this.group()?.filter_version||value.catalog_date!==this.discoveryCatalogDate()||!Array.isArray(value.titles)||!(nextPage===null||(Number.isInteger(nextPage)&&nextPage>=1))){localStorage.removeItem(key);return null;}
+      const titles=value.titles.filter((title):title is Title=>!!title&&Number.isInteger(title.id)&&(title.media_type==='movie'||title.media_type==='tv'));
+      return {filter_version:value.filter_version!,catalog_date:value.catalog_date!,next_page:nextPage,titles};
+    }catch{try{localStorage.removeItem(key);}catch{}return null;}
+  }
+  private saveDiscoveryCheckpoint(){
+    const id=this.groupId();if(this.demo()||id===null||!this.group())return;
+    try{localStorage.setItem(this.discoveryCheckpointKey(id,this.discoverMedia()),JSON.stringify({filter_version:this.group()!.filter_version,catalog_date:this.discoveryCatalogDate(),next_page:this.nextPage,titles:this.deck()} satisfies DiscoveryCheckpoint));}catch{/* Discovery remains available if browser storage is full or disabled. */}
+  }
+  private clearDiscoveryCheckpoint(groupId=this.groupId(),media=this.discoverMedia()){
+    if(groupId===null)return;try{localStorage.removeItem(this.discoveryCheckpointKey(groupId,media));}catch{/* Storage may be disabled. */}
+  }
+  private async resumeDeck(){
+    const id=this.groupId();if(id===null||!this.group())return;
+    if(this.demo()){if(!this.deck().length)await this.loadMore();return;}
+    const key=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());
+    if(this.activeDiscoveryKey!==key){
+      this.epoch++;this.activeDiscoveryKey=key;this.deck.set([]);this.nextPage=1;
+      const saved=this.readDiscoveryCheckpoint(id,this.discoverMedia());
+      if(saved){this.nextPage=saved.next_page;this.deck.set(saved.titles.filter(title=>!this.localVoteKeys.has(id+':'+titleKey(title))));}
+    }
+    this.preloadNextPosters();
+    if(!this.deck().length&&this.nextPage!==null)await this.loadMore();
+    else if(this.deck().length<3&&this.nextPage!==null)void this.loadMore();
+  }
   private async discoverPage(groupId:number,media:MediaFilter,page:number){
     const key=this.discoveryPageKey(groupId,media,page);const pending=this.discoveryPrefetches.get(key);if(pending)await pending;
     return this.api.get<Deck>('discover',{group_id:groupId,page,media_type:media});
@@ -380,22 +445,23 @@ export class AppComponent implements OnDestroy {
       const priority=titles.filter(t=>DEMO_PARTNER_VOTES[titleKey(t)]==='like').map(t=>({...t,group_likes:1}));const priorityKeys=new Set(priority.map(titleKey));
       this.deck.set(mergePriorities([], [...priority,...this.demoSortByTaste(titles.filter(t=>!priorityKeys.has(titleKey(t))))]));this.preloadNextPosters();this.nextPage=null;return;
     }
-    if(this.nextPage===null || !this.tmdbConfigured())return;const epoch=this.epoch;const id=this.groupId()!;this.loadingDeck.set(true);this.error.set('');
+    if(this.nextPage===null || !this.tmdbConfigured())return;const epoch=this.epoch;const id=this.groupId()!;this.activeDiscoveryKey=this.activeDiscoveryCheckpointKey(id,this.discoverMedia());this.loadingDeck.set(true);this.error.set('');
     const media=this.discoverMedia();const fillingInitialDeck=this.deck().length===0;const maxRounds=fillingInitialDeck?6:1;
     let loaded=false;
     try{
       let rounds=0;
       do{
         const r=await this.discoverPage(id,media,this.nextPage ?? 1);
-        if(epoch!==this.epoch)return;
+        if(epoch!==this.epoch||id!==this.groupId())return;
         this.nextPage=r.next_page;
         this.deck.update(all=>{const known=new Set(all.map(titleKey));return [...all,...r.titles.filter(t=>!known.has(titleKey(t))&&!this.localVoteKeys.has(id+':'+titleKey(t)))];});
         this.preloadNextPosters();
         if(this.group()?.filter_version!==r.filter_version){this.groups.update(all=>all.map(g=>g.id===id?{...g,filter_version:r.filter_version}:g));}
+        this.saveDiscoveryCheckpoint();
         rounds++;
       }while(this.nextPage!==null && rounds<maxRounds && (fillingInitialDeck?needsInitialCoverage(this.deck(),media):!this.deck().length));
       loaded=true;
-    }catch(e){this.setError(e);}finally{this.loadingDeck.set(false);if(loaded)this.prefetchNextDiscoverPage();if(epoch!==this.epoch && this.user() && this.group() && this.view()==='discover')void this.loadMore();}
+    }catch(e){this.setError(e);}finally{this.loadingDeck.set(false);if(loaded)this.prefetchNextDiscoverPage();if((epoch!==this.epoch||id!==this.groupId())&&this.user()&&this.group()&&this.view()==='discover')void this.resumeDeck();}
   }
   private async refreshTasteOrder(){
     if(this.demo()||!this.group())return;
@@ -410,9 +476,11 @@ export class AppComponent implements OnDestroy {
         return [...(current?[current]:[]),...remaining.map((title,index)=>({title,index,rank:rank.get(titleKey(title))??Number.MAX_SAFE_INTEGER})).sort((a,b)=>a.rank-b.rank||a.index-b.index).map(item=>item.title)];
       });
       this.preloadNextPosters();
+      this.saveDiscoveryCheckpoint();
     }catch{/* El mazo en memoria sigue disponible si falla el refresco de afinidad. */}
   }
   canLoadMore(){return this.nextPage!==null;}
+  nextDiscoveryPage(){return this.nextPage;}
   async vote(decision:Decision,title=this.current()){
     if(!title || (this.busy()&&this.pendingVotes()===0) || (!this.online()&&!this.demo()))return;
     const groupId=this.groupId();if(groupId===null)return;
@@ -420,6 +488,7 @@ export class AppComponent implements OnDestroy {
     if(this.pendingVoteKeys.has(localKey))return;
     const isDiscoverCard=this.view()==='discover'&&titleKey(this.current()??title)===key;
     const isFilterCard=this.view()==='filter'&&titleKey(this.filterCurrent()??title)===key;
+    const isSimilarCard=this.view()==='similar'&&this.similarTitles().some(item=>titleKey(item)===key);
     const isActiveQueueCard=isDiscoverCard||isFilterCard;
     this.pendingVoteKeys.add(localKey);this.pendingVotes.update(count=>count+1);
     this.busy.set(true);this.error.set('');this.swipeX.set(0);
@@ -430,7 +499,7 @@ export class AppComponent implements OnDestroy {
         this.localVoteKeys.add(localKey);this.animateTitleKey.set(key);this.animateDecision.set(decision);
         const exitDuration=window.matchMedia('(prefers-reduced-motion: reduce)').matches?160:270;
         await new Promise<void>(resolve=>window.setTimeout(resolve,exitDuration));
-        if(isDiscoverCard){this.deck.update(all=>all.filter(t=>titleKey(t)!==key));this.preloadNextPosters();if(this.deck().length<3&&this.nextPage!==null)void this.loadMore();}
+        if(isDiscoverCard){this.deck.update(all=>all.filter(t=>titleKey(t)!==key));this.preloadNextPosters();this.saveDiscoveryCheckpoint();if(this.deck().length<3&&this.nextPage!==null)void this.loadMore();}
         if(isFilterCard){this.filterTitles.update(all=>all.filter(t=>titleKey(t)!==key));if(this.filterTitles().length<3&&this.filterNext()!==null)void this.loadFilterMore();}
         this.animateDecision.set(null);this.animateTitleKey.set(null);
       }
@@ -450,7 +519,9 @@ export class AppComponent implements OnDestroy {
       this.localVoteKeys.add(localKey);
       this.deck.update(all=>all.filter(item=>titleKey(item)!==key));
       this.filterTitles.update(all=>all.filter(item=>titleKey(item)!==key));
+      this.similarTitles.update(all=>all.filter(item=>titleKey(item)!==key));
       this.preloadNextPosters();
+      this.saveDiscoveryCheckpoint();
       this.showDetail.set(false);
       if(matches.length){
         this.showMatch.set(title);
@@ -463,13 +534,14 @@ export class AppComponent implements OnDestroy {
       if(this.view()==='favorites')await this.loadFavorites();
     }catch(e){
       if(e instanceof ApiError&&e.code==='ALREADY_SEEN'){
-        this.localVoteKeys.add(localKey);this.deck.update(all=>all.filter(item=>titleKey(item)!==key));this.filterTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.preloadNextPosters();this.platformTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.newsTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.showDetail.set(false);this.notify('Otra persona del grupo ya la ha marcado como vista.');
+        this.localVoteKeys.add(localKey);this.deck.update(all=>all.filter(item=>titleKey(item)!==key));this.filterTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.similarTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.preloadNextPosters();this.saveDiscoveryCheckpoint();this.platformTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.newsTitles.update(all=>all.filter(item=>titleKey(item)!==key));this.showDetail.set(false);this.notify('Otra persona del grupo ya la ha marcado como vista.');
       }else if(e instanceof ApiError&&e.code==='DECK_STALE'){
-        this.localVoteKeys.delete(localKey);if(isFilterCard&&groupId===this.groupId()&&this.view()==='filter')await this.searchFilter();else await this.reloadDeck();this.notify('Hemos actualizado las propuestas con los nuevos filtros.');
+        this.localVoteKeys.delete(localKey);if(isFilterCard&&groupId===this.groupId()&&this.view()==='filter')await this.searchFilter();else if(isSimilarCard&&groupId===this.groupId()&&this.view()==='similar')await this.loadSimilarFeed(this.similarPage());else await this.reloadDeck();this.notify('Hemos actualizado las propuestas con los nuevos filtros.');
       }else{
         this.localVoteKeys.delete(localKey);
         if(isDiscoverCard&&groupId===this.groupId()&&this.view()==='discover'){
           this.deck.update(all=>all.some(item=>titleKey(item)===key)?all:[title,...all]);this.preloadNextPosters();
+          this.saveDiscoveryCheckpoint();
         }
         if(isFilterCard&&groupId===this.groupId()&&this.view()==='filter')this.filterTitles.update(all=>all.some(item=>titleKey(item)===key)?all:[title,...all]);
         this.setError(e);
@@ -517,8 +589,11 @@ export class AppComponent implements OnDestroy {
   async notificationClick(n:AppNotification){this.showNotifications.set(false);const id=Number(n.group_id);if(this.groupId()!==id)await this.switchGroup(String(id));await this.navigate('matches');if(!n.read_at&&!this.demo()){try{await this.api.post('read_notifications',{ids:[Number(n.id)]});this.notifications.update(all=>all.map(x=>x.id===n.id?{...x,read_at:new Date().toISOString()}:x));}catch(e){this.setError(e);}}}
   private polling=false;
   private async poll(){if(this.polling||this.busy()||!this.user()||this.demo()||!this.online()||document.visibilityState!=='visible')return;this.polling=true;try{
-    await this.loadNotifications();const id=this.groupId();if(id){const visible=this.view()==='platforms'?[...this.platformTitles(),...this.deck()]:this.view()==='news'?[...this.newsTitles(),...this.deck()]:this.view()==='filter'?[...this.filterTitles(),...this.deck()]:[...this.deck(),...this.platformTitles()];const keys=[...new Set(visible.map(titleKey))].slice(0,60).join(',');const r=await this.api.get<{group:Group;hidden:string[];seen:string[];priority_keys:string[]}>('state',{group_id:id,titles:keys,media_type:this.discoverMedia()});if(id!==this.groupId()||this.busy())return;const version=this.group()?.filter_version;this.groups.update(all=>all.map(g=>g.id===id?r.group:g));this.deck.update(all=>all.filter(t=>!r.hidden.includes(`${t.media_type}:${t.id}`)));this.preloadNextPosters();this.platformTitles.update(all=>all.filter(t=>!(r.seen ?? []).includes(titleKey(t))));this.newsTitles.update(all=>all.filter(t=>!r.hidden.includes(`${t.media_type}:${t.id}`)&&!(r.seen ?? []).includes(titleKey(t))));this.filterTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));
-      if(version!==r.group.filter_version){const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);if(this.view()==='discover')await this.reloadDeck();if(this.view()==='platforms'){this.catalog.set(null);await this.loadPlatformFeed();}if(this.view()==='news')await this.loadNews();if(this.view()==='filter'&&this.filterHasSearched())await this.searchFilter();}
+    await this.loadNotifications();const id=this.groupId();if(id){
+      const visible=this.view()==='platforms'?[...this.platformTitles(),...this.deck()]:this.view()==='news'?[...this.newsTitles(),...this.deck()]:this.view()==='filter'?[...this.filterTitles(),...this.deck()]:this.view()==='similar'?[...this.similarTitles(),...this.deck()]:[...this.deck(),...this.platformTitles()];
+      const keys=[...new Set(visible.map(titleKey))].slice(0,60).join(',');const r=await this.api.get<{group:Group;hidden:string[];seen:string[];priority_keys:string[]}>('state',{group_id:id,titles:keys,media_type:this.discoverMedia()});if(id!==this.groupId()||this.busy())return;
+      const version=this.group()?.filter_version;this.groups.update(all=>all.map(g=>g.id===id?r.group:g));this.deck.update(all=>all.filter(t=>!r.hidden.includes(`${t.media_type}:${t.id}`)));this.preloadNextPosters();this.saveDiscoveryCheckpoint();this.platformTitles.update(all=>all.filter(t=>!(r.seen ?? []).includes(titleKey(t))));this.newsTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));this.filterTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));this.similarTitles.update(all=>all.filter(t=>!r.hidden.includes(titleKey(t))&&!(r.seen ?? []).includes(titleKey(t))));
+      if(version!==r.group.filter_version){const prefix=id+':';for(const key of this.localVoteKeys)if(key.startsWith(prefix))this.localVoteKeys.delete(key);if(this.view()==='discover')await this.reloadDeck();if(this.view()==='similar')await this.loadSimilarFeed(this.similarPage());if(this.view()==='platforms'){this.catalog.set(null);await this.loadPlatformFeed();}if(this.view()==='news')await this.loadNews();if(this.view()==='filter'&&this.filterHasSearched())await this.searchFilter();}
       if(this.view()==='discover')await this.refreshPriorities(r.priority_keys ?? []);
       if(this.view()==='matches')await this.loadMatches();if(this.view()==='favorites')await this.loadFavorites();if(this.view()==='statistics')await this.loadStatistics();}
     if(this.telegramLink){const b=await this.api.get<Bootstrap>('bootstrap');this.telegram.set(b.telegram);if(b.telegram.linked)this.telegramLink='';}
